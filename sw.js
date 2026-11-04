@@ -1,10 +1,10 @@
 /* Pro10 — guarda os arquivos do site no celular para abrir rápido.
  * Ao publicar uma versão nova, aumente o número em VERSAO. */
-var VERSAO = 'pro10-v3';
+var VERSAO = 'pro10-v4';
 var ARQUIVOS = [
-  './', 'index.html', 'manifest.webmanifest', 'css/estilo.css?v=3',
-  'js/config.js?v=3', 'js/logica.js?v=3', 'js/icones.js?v=3', 'js/api.js?v=3', 'js/app.js?v=3',
-  'icones/icone.svg', 'icones/icone-192.png', 'icones/icone-512.png'
+  './', 'index.html', 'manifest.webmanifest', 'estilo.css?v=4',
+  'config.js?v=4', 'logica.js?v=4', 'icones.js?v=4', 'api.js?v=4', 'app.js?v=4',
+  'icone.svg', 'icone-192.png', 'icone-512.png'
 ];
 
 self.addEventListener('install', function (e) {

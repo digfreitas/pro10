@@ -11,21 +11,34 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pro10">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" type="image/svg+xml" href="icones/icone.svg">
-  <link rel="icon" type="image/png" sizes="192x192" href="icones/icone-192.png">
-  <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="icone.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icone-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&amp;family=Barlow+Semi+Condensed:wght@600;700&amp;display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/estilo.css?v=3">
+  <link rel="stylesheet" href="estilo.css?v=4">
 </head>
 <body>
   <div id="app" aria-live="polite"></div>
   <noscript><p style="padding:24px;font-family:sans-serif">O Pro10 precisa do JavaScript ligado no navegador.</p></noscript>
-  <script src="js/config.js?v=3"></script>
-  <script src="js/logica.js?v=3"></script>
-  <script src="js/icones.js?v=3"></script>
-  <script src="js/api.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="config.js?v=4"></script>
+  <script src="logica.js?v=4"></script>
+  <script src="icones.js?v=4"></script>
+  <script src="api.js?v=4"></script>
+  <script src="app.js?v=4"></script>
+  <script>
+    // Se o app não abrir, mostra o motivo mais comum em vez de uma página em branco.
+    window.addEventListener('load', function () {
+      var app = document.getElementById('app');
+      if (app && !app.children.length) {
+        app.innerHTML = '<div style="padding:24px;font-family:sans-serif;line-height:1.5;max-width:520px">' +
+          '<h2 style="margin:0 0 8px">O Pro10 não carregou</h2>' +
+          '<p>Algum arquivo do app não foi encontrado. Confira no GitHub se todos os arquivos estão na raiz do repositório, ao lado do <b>index.html</b>: ' +
+          'app.js, api.js, config.js, icones.js, logica.js, estilo.css e sw.js.</p>' +
+          '<p>Depois de enviar o que faltar, espere 1 ou 2 minutos e recarregue a página.</p></div>';
+      }
+    });
+  </script>
 </body>
 </html>

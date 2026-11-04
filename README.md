@@ -14,6 +14,6 @@ Como funciona:
 
 - Roda no celular como app (PWA) e é publicado no GitHub Pages.
 - Os dados ficam numa planilha Google, com o Apps Script como servidor.
-- Sem o endereço do servidor em `js/config.js`, o app roda em modo demonstração, com dados fictícios.
+- Sem o endereço do servidor em `config.js`, o app roda em modo demonstração, com dados fictícios.
 
 Projeto desenvolvido com apoio de IA generativa, como parte do TCC do MBA em Gestão de Negócios e IA (IPOG).
