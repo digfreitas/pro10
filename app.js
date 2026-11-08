@@ -209,7 +209,7 @@
     'entrar': telaEntrar, 'inicio': telaInicio, 'marcar': telaMarcar, 'quiz': telaQuiz, 'pergunta': telaPergunta,
     'sugerir': telaSugerir, 'ranking': telaRanking, 'perfil': telaPerfil, 'avatar': telaAvatar, 'aovivo': telaAoVivo,
     'lider/validar': telaValidar, 'lider/perguntas': telaPerguntasLider, 'lider/importar': telaImportar,
-    'lider/apuracao': telaApuracao, 'lider/aovivo': telaAoVivoTV, 'lider/config': telaConfig
+    'lider/apuracao': telaApuracao, 'lider/aovivo': telaAoVivoTV, 'lider/config': telaConfig, 'lider/equipe': telaEquipe
   };
 
   function limpar() {
@@ -977,7 +977,7 @@
         try { lista = JSON.parse(txt.slice(i, j + 1)); } catch (e) { erro.textContent = 'O texto colado não está no formato esperado. Peça à IA para responder só com o JSON.'; return; }
         ocupado(f.querySelector('[type=submit]'), true);
         chamar('importarPerguntas', { perguntas: lista }).then(function (x) {
-          toast(x.importadas + ' perguntas importadas como rascunho.' + (x.erros.length ? ' ' + x.erros.length + ' com problema.' : ''), 'ok');
+          toast(x.importadas + (x.importadas === 1 ? ' pergunta importada' : ' perguntas importadas') + ' como rascunho.' + (x.erros.length ? ' ' + x.erros.length + ' com problema.' : ''), 'ok');
           location.hash = '#/lider/perguntas';
         }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); erro.textContent = e.message; });
       }
@@ -1131,10 +1131,12 @@
       var planilha = Api.demo ? 'No modo demonstração estas listas são fixas.' : 'Para mudar, edite a aba correspondente na planilha.';
       var tabelas = '<section class="secao"><h2 class="h2">Janelas por turno</h2><div class="caixa-rolavel"><table class="tabela"><thead><tr><th>Turno</th><th>Janelas</th></tr></thead><tbody>' + r.turnos.map(function (t) { return '<tr><td>' + esc(t.turno) + '</td><td>' + esc(t.janelas) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
         '<h2 class="h2" style="margin-top:8px">Entregas, pontos e selos</h2><div class="caixa-rolavel"><table class="tabela"><thead><tr><th>Entrega</th><th>Pts</th><th>Referência</th><th>Sorteio</th><th>Selo</th></tr></thead><tbody>' + r.tipos.map(function (t) { return '<tr' + (t.ativo ? '' : ' style="opacity:.5"') + '><td>' + esc(t.nome) + '</td><td>' + t.pontos + '</td><td>' + esc(t.referencia) + '</td><td>' + (t.sorteavel ? 'sim' : 'não') + '</td><td>' + esc(t.selo || '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' +
-        '<h2 class="h2" style="margin-top:8px">Pessoas</h2><div class="caixa-rolavel"><table class="tabela"><thead><tr><th>Nome</th><th>Turno</th><th>Papel</th></tr></thead><tbody>' + r.pessoas.map(function (p) { return '<tr' + (p.ativo ? '' : ' style="opacity:.5"') + '><td>' + esc(p.nome) + '</td><td>' + esc(p.turno) + '</td><td>' + (p.papel === 'lider' ? 'líder' : 'equipe') + '</td></tr>'; }).join('') + '</tbody></table></div><p class="muted">' + planilha + '</p></section>';
+        '<p class="muted">' + planilha + '</p></section>';
+      var ativos = r.pessoas.filter(function (p) { return p.ativo; }).length;
+      var equipe = '<a class="cartao linha-flex" href="#/lider/equipe" style="text-decoration:none;color:inherit"><span class="icone-q">' + I('pessoas', 22) + '</span><span class="texto-flex"><span class="nome">Equipe</span><span class="muted">' + ativos + (ativos === 1 ? ' pessoa ativa' : ' pessoas ativas') + ' · cadastrar, editar e gerar PIN</span></span>' + I('seta', 22) + '</a>';
       var fim = '<section class="secao"><a class="botao botao-leve" href="#/inicio">Ver o app como a equipe</a><button type="button" class="botao botao-leve" data-acao="sair">' + I('sair', 20) + 'Sair do app</button>' +
         (Api.demo ? '<button type="button" class="botao botao-leve" data-acao="reiniciarDemo">Recomeçar a demonstração</button>' : '') + '</section>';
-      render(paginaLider('lider/config', cabLider('Ajustes', 'Regras, metas e módulos', 'ajustes') + '<main class="conteudo" style="gap:22px">' + meta + form + tabelas + fim + '</main>'), {
+      render(paginaLider('lider/config', cabLider('Ajustes', 'Regras, metas e módulos', 'ajustes') + '<main class="conteudo" style="gap:22px">' + equipe + meta + form + tabelas + fim + '</main>'), {
         'form:config': function (f) {
           var valores = {};
           r.campos.forEach(function (c) { var el = f.elements[c.chave]; if (!el) return; valores[c.chave] = c.tipo === 'simnao' ? (el.checked ? 'sim' : 'nao') : el.value; });
@@ -1151,6 +1153,76 @@
             toast(x.bonus_dado ? 'Meta batida! Todos ganharam +' + x.meta.bonus + ' pts.' : 'Meta atualizada.', 'ok');
             telaConfig();
           }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
+        }
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Líder: cadastro da equipe
+  // ---------------------------------------------------------------------------
+  function telaEquipe(_, aviso) {
+    comDados('equipeLider', {}, function (r) {
+      function opcoesTurno(sel) {
+        if (!r.turnos.length) return '<option value="">(sem turnos)</option>';
+        return r.turnos.map(function (t) { return '<option value="' + esc(t) + '"' + (t === sel ? ' selected' : '') + '>Turno ' + esc(t) + '</option>'; }).join('');
+      }
+      function opcoesPapel(sel) {
+        return '<option value="equipe"' + (sel !== 'lider' ? ' selected' : '') + '>Equipe</option><option value="lider"' + (sel === 'lider' ? ' selected' : '') + '>Líder</option>';
+      }
+      var blocos = [];
+      if (aviso && aviso.pin) {
+        blocos.push('<div class="cartao-verde" style="flex-direction:column;align-items:stretch;gap:10px" role="status">' +
+          '<span class="rotulo verde">' + (aviso.novo ? 'Cadastro feito' : 'PIN novo gerado') + '</span>' +
+          '<span class="nome">PIN de ' + esc(aviso.nome) + '</span>' +
+          '<span class="num" style="font-size:44px;letter-spacing:10px">' + esc(aviso.pin) + '</span>' +
+          '<span style="font-size:14px">Anote e entregue só para a pessoa. Por segurança, este PIN não aparece de novo. Se ela esquecer, gere outro aqui.</span>' +
+          '<button type="button" class="botao botao-verde" data-acao="anotei">Pronto, anotei</button></div>');
+      }
+      blocos.push('<form class="cartao" data-form="nova" style="gap:12px"><h2 class="h2">Cadastrar pessoa</h2>' +
+        '<div class="campo"><label for="np-nome">Nome que aparece no app</label><input id="np-nome" name="nome" class="entrada" maxlength="40" autocomplete="off" required></div>' +
+        '<div class="grid2"><div class="campo"><label for="np-turno">Turno</label><select id="np-turno" name="turno" class="entrada">' + opcoesTurno(r.turnos[0]) + '</select></div>' +
+        '<div class="campo"><label for="np-papel">Papel</label><select id="np-papel" name="papel" class="entrada">' + opcoesPapel('equipe') + '</select></div></div>' +
+        '<button class="botao" type="submit">Cadastrar e gerar PIN</button></form>');
+      var ativos = r.pessoas.filter(function (p) { return p.ativo; }).length;
+      blocos.push('<section class="secao"><h2 class="h2">Pessoas · ' + ativos + (ativos === 1 ? ' ativa' : ' ativas') + '</h2>' + r.pessoas.map(function (p) {
+        var chips = (p.papel === 'lider' ? '<span class="chip chip-escuro">Líder</span>' : '<span class="chip chip-cinza">Turno ' + esc(p.turno || '–') + '</span>') +
+          (p.voce ? '<span class="chip chip-azul">Você</span>' : '') + (p.ativo ? '' : '<span class="chip chip-vermelho">Desativada</span>');
+        return '<details class="cartao"' + (p.ativo ? '' : ' style="opacity:.75"') + '><summary style="gap:10px">' + A(p.avatar, 36) + '<span class="texto-flex"><span class="nome">' + esc(p.nome) + '</span><span style="display:flex;gap:6px;flex-wrap:wrap">' + chips + '</span></span></summary>' +
+          '<form data-form="pessoa" data-id="' + esc(p.id) + '" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">' +
+          '<div class="campo"><label for="pn-' + esc(p.id) + '">Nome</label><input id="pn-' + esc(p.id) + '" name="nome" class="entrada" maxlength="40" value="' + esc(p.nome) + '" required></div>' +
+          '<div class="grid2"><div class="campo"><label for="pt-' + esc(p.id) + '">Turno</label><select id="pt-' + esc(p.id) + '" name="turno" class="entrada">' + opcoesTurno(p.turno) + '</select></div>' +
+          '<div class="campo"><label for="pp-' + esc(p.id) + '">Papel</label><select id="pp-' + esc(p.id) + '" name="papel" class="entrada"' + (p.voce ? ' disabled' : '') + '>' + opcoesPapel(p.papel) + '</select></div></div>' +
+          '<div class="item" style="padding:0;min-height:44px"><label for="pa-' + esc(p.id) + '" style="flex:1;font-size:15px">Ativa no app</label><label class="interruptor"><input type="checkbox" role="switch" id="pa-' + esc(p.id) + '" name="ativo"' + (p.ativo ? ' checked' : '') + (p.voce ? ' disabled' : '') + '><span></span></label></div>' +
+          (p.voce ? '<p class="muted" style="font-size:13px">Você não pode desativar o seu cadastro nem deixar de ser líder.</p>' : '') +
+          '<div class="grid2"><button class="botao" type="submit">Salvar</button><button type="button" class="botao botao-contorno" data-acao="novoPin" data-id="' + esc(p.id) + '">Gerar novo PIN</button></div>' +
+          '</form></details>';
+      }).join('') + '</section>');
+      blocos.push('<p class="muted" style="font-size:14px">Ninguém é excluído. Quem sai da equipe fica desativado: some do app, e o histórico continua guardado para os dados do TCC.</p>' +
+        '<a class="botao botao-leve" href="#/lider/config">' + I('voltar', 20) + 'Voltar aos ajustes</a>');
+      render(paginaLider('lider/config', cabLider('Equipe', 'Cadastro, turno e PIN', 'pessoas') + '<main class="conteudo" style="gap:18px">' + blocos.join('') + '</main>'), {
+        anotei: function () { telaEquipe(); },
+        'form:nova': function (f) {
+          ocupado(f.querySelector('[type=submit]'), true);
+          chamar('salvarPessoa', { nome: f.nome.value, turno: f.turno.value, papel: f.papel.value }).then(function (x) {
+            telaEquipe('', { novo: true, nome: x.nome, pin: x.pin });
+          }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
+        },
+        'form:pessoa': function (f) {
+          var id = f.getAttribute('data-id');
+          var p = r.pessoas.filter(function (x) { return x.id === id; })[0] || {};
+          ocupado(f.querySelector('[type=submit]'), true);
+          chamar('salvarPessoa', { id: id, nome: f.nome.value, turno: f.turno.value, papel: p.voce ? 'lider' : f.papel.value, ativo: p.voce ? 'sim' : (f.ativo.checked ? 'sim' : 'nao') }).then(function () {
+            toast('Cadastro salvo.', 'ok');
+            telaEquipe();
+          }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
+        },
+        novoPin: function (b) {
+          ocupado(b, true);
+          chamar('novoPin', { id: b.getAttribute('data-id') }).then(function (x) {
+            if (x.proprio) atualizarSessao({ pin: x.pin });
+            telaEquipe('', { nome: x.nome, pin: x.pin });
+          }).catch(function (e) { ocupado(b, false); falhou(e); });
         }
       });
     });

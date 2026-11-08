@@ -260,6 +260,36 @@ var Logica = (function () {
   function avatarDe(p) { var a = txt(p && p.avatar); return AVATARES.indexOf(a) >= 0 ? a : 'rodeiro'; }
   function pessoaPublica(p) { return { id: txt(p.id), nome: txt(p.nome), turno: txt(p.turno), papel: ehLider(p) ? 'lider' : 'equipe', avatar: avatarDe(p) }; }
 
+  function turnosCadastrados(ctx) {
+    var vistos = {};
+    return ctx.t('Turnos').map(function (t) { return txt(t.turno); }).filter(function (t) { if (!t || vistos[t]) return false; vistos[t] = 1; return true; });
+  }
+  // Código da pessoa a partir do nome: "Ana Paula" vira "ana-paula" (ou "ana-paula-2" se já existir).
+  function idPessoa(ctx, nome) {
+    var base = normalizar(nome).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'pessoa';
+    var usados = {};
+    ctx.t('Pessoas').forEach(function (p) { usados[txt(p.id)] = 1; });
+    var id = base, n = 2;
+    while (usados[id]) id = base + '-' + n++;
+    return id;
+  }
+  // PIN de 4 dígitos sorteado. Evita PINs fáceis (1111, 1234, 9876) e os que outra pessoa já usa.
+  function pinFacil(pin) {
+    if (/^(\d)\1{3}$/.test(pin)) return true;
+    var d = pin.split('').map(Number), sobe = true, desce = true;
+    for (var i = 1; i < 4; i++) { if (d[i] !== d[i - 1] + 1) sobe = false; if (d[i] !== d[i - 1] - 1) desce = false; }
+    return sobe || desce || /^(19|20)\d\d$/.test(pin);
+  }
+  function gerarPin(ctx, idDono) {
+    var usados = {};
+    ctx.t('Pessoas').forEach(function (p) { if (txt(p.id) !== idDono && sim(p.ativo)) usados[txt(p.pin)] = 1; });
+    for (var i = 0; i < 200; i++) {
+      var pin = ('000' + Math.floor(ctx.rnd() * 10000)).slice(-4);
+      if (!pinFacil(pin) && !usados[pin]) return pin;
+    }
+    throw erro('Não foi possível gerar um PIN. Tente de novo.');
+  }
+
   function autenticar(ctx, req) {
     var p = pessoaPorId(ctx, req.pessoa_id);
     if (!p || !sim(p.ativo)) throw erro('Pessoa não encontrada. Peça ao líder para conferir o cadastro.');
@@ -1207,6 +1237,48 @@ var Logica = (function () {
       };
     },
 
+    // ----- Cadastro da equipe pelo app -----
+    equipeLider: function (ctx, req, lider) {
+      var pessoas = ctx.t('Pessoas').filter(function (p) { return txt(p.id); }).map(function (p) {
+        var x = pessoaPublica(p); x.ativo = sim(p.ativo); x.voce = txt(p.id) === txt(lider.id); return x;
+      }).sort(function (a, b) { return (b.ativo - a.ativo) || (b.papel === 'lider') - (a.papel === 'lider') || a.nome.localeCompare(b.nome, 'pt-BR'); });
+      return { ok: true, pessoas: pessoas, turnos: turnosCadastrados(ctx) };
+    },
+
+    salvarPessoa: function (ctx, req, lider) {
+      var nome = txt(req.nome).replace(/\s+/g, ' ');
+      if (nome.length < 2) throw erro('Escreva o nome da pessoa.');
+      if (nome.length > 40) throw erro('Use um nome com até 40 letras.');
+      var papel = txt(req.papel) === 'lider' ? 'lider' : 'equipe';
+      var turnos = turnosCadastrados(ctx);
+      var turno = txt(req.turno);
+      if (turnos.length && turnos.indexOf(turno) < 0) throw erro('Escolha um dos turnos cadastrados: ' + turnos.join(', ') + '.');
+      var id = txt(req.id);
+      var repetido = ctx.t('Pessoas').filter(function (p) { return txt(p.id) && txt(p.id) !== id && normalizar(p.nome) === normalizar(nome); })[0];
+      if (repetido) throw erro('Já existe alguém com o nome "' + txt(repetido.nome) + '". Use um sobrenome ou apelido para diferenciar.');
+      if (!id) {
+        var pin = gerarPin(ctx, '');
+        var novo = { id: idPessoa(ctx, nome), nome: nome, turno: turno, papel: papel, pin: pin, avatar: 'rodeiro', ativo: 'sim' };
+        ctx.ins('Pessoas', novo);
+        return { ok: true, novo: true, id: novo.id, nome: nome, pin: pin };
+      }
+      var p = pessoaPorId(ctx, id);
+      if (!p) throw erro('Pessoa não encontrada.');
+      var ativo = req.ativo === undefined ? sim(p.ativo) : sim(req.ativo);
+      if (id === txt(lider.id) && !ativo) throw erro('Você não pode desativar o seu próprio cadastro.');
+      if (id === txt(lider.id) && papel !== 'lider') throw erro('Você não pode tirar o seu próprio papel de líder. Peça a outro líder.');
+      ctx.upd('Pessoas', 'id', id, { nome: nome, turno: turno, papel: papel, ativo: ativo ? 'sim' : 'nao' });
+      return { ok: true, novo: false, id: id, nome: nome };
+    },
+
+    novoPin: function (ctx, req, lider) {
+      var p = pessoaPorId(ctx, req.id);
+      if (!p) throw erro('Pessoa não encontrada.');
+      var pin = gerarPin(ctx, txt(p.id));
+      ctx.upd('Pessoas', 'id', txt(p.id), { pin: pin });
+      return { ok: true, id: txt(p.id), nome: txt(p.nome), pin: pin, proprio: txt(p.id) === txt(lider.id) };
+    },
+
     salvarConfig: function (ctx, req) {
       var v = req.valores || {};
       EDITAVEIS.forEach(function (e) {
@@ -1281,7 +1353,7 @@ var Logica = (function () {
   };
 
   // Ações que só leem dados (não precisam de trava na planilha)
-  var SOMENTE_LEITURA = { inicio: 1, entrar: 1, painel: 1, tipos: 1, quiz: 1, pergunta: 1, ranking: 1, perfil: 1, aoVivoEstado: 1, pendentes: 1, perguntasLider: 1, previaApuracao: 1, configLider: 1, aoVivoPainel: 1 };
+  var SOMENTE_LEITURA = { inicio: 1, entrar: 1, painel: 1, tipos: 1, quiz: 1, pergunta: 1, ranking: 1, perfil: 1, aoVivoEstado: 1, pendentes: 1, perguntasLider: 1, previaApuracao: 1, configLider: 1, aoVivoPainel: 1, equipeLider: 1 };
 
   // ---------------------------------------------------------------------------
   // Ponto de entrada
