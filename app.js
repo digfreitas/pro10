@@ -59,6 +59,20 @@
       return r;
     });
   }
+  // Consulta repetida do quiz ao vivo. Com a planilha, as consultas são mais espaçadas, cada celular
+  // começa num momento diferente e nunca há duas ao mesmo tempo, para o servidor aguentar a equipe toda.
+  function consultarSempre(fn, msDemo, msServidor) {
+    var emCurso = 0;
+    function passo() {
+      if (document.hidden || (emCurso && Date.now() - emCurso < 20000)) return;
+      emCurso = Date.now();
+      var fim = function () { emCurso = 0; };
+      fn().then(fim, fim);
+    }
+    if (Api.demo) { estado.timers.push(setInterval(passo, msDemo)); return; }
+    estado.timers.push(setTimeout(function () { estado.timers.push(setInterval(passo, msServidor)); }, Math.random() * msServidor));
+  }
+
   function sessaoInvalida(e) {
     if (sessao && /Código ou PIN incorreto/.test(e && e.message)) {
       gravarSessao(null);
@@ -713,19 +727,33 @@
           if (!atual || !atual.pergunta) return;
           enviando = b.getAttribute('data-l');
           desenhar(atual);
-          chamar('aoVivoResponder', { pergunta_id: atual.pergunta.id, resposta: enviando }).then(atualizar).catch(function (e) { enviando = ''; ultimo = ''; falhou(e); atualizar(); });
+          // Com a planilha, as respostas saem um pouco espalhadas, porque todos tocam quase ao mesmo tempo
+          var pergunta = atual.pergunta.id, letra = enviando;
+          if (Api.demo) enviarResposta(pergunta, letra, 0);
+          else estado.timers.push(setTimeout(function () { enviarResposta(pergunta, letra, 0); }, Math.random() * 4000));
         }
       });
     }
+    function enviarResposta(pergunta, letra, tentativa) {
+      chamar('aoVivoResponder', { pergunta_id: pergunta, resposta: letra }).then(Api.demo ? atualizar : function () {}).catch(function (e) {
+        // Se a tentativa anterior chegou ao servidor, a resposta já está guardada
+        if (/já respondeu/.test(e.message)) return;
+        if (e.resposta && e.resposta.rede && tentativa < 3) {
+          estado.timers.push(setTimeout(function () { enviarResposta(pergunta, letra, tentativa + 1); }, 2000 + Math.random() * 3000));
+          return;
+        }
+        enviando = ''; ultimo = ''; falhou(e); atualizar();
+      });
+    }
     function atualizar() {
-      chamar('aoVivoEstado').then(function (r) {
+      return chamar('aoVivoEstado').then(function (r) {
         if (r.pergunta && atual && atual.pergunta && atual.pergunta.id !== r.pergunta.id) enviando = '';
         desenhar(r);
       }).catch(function (e) { sessaoInvalida(e); });
     }
     carregando();
     atualizar();
-    estado.timers.push(setInterval(atualizar, 3000));
+    consultarSempre(atualizar, 3000, 6000);
   }
 
   // ---------------------------------------------------------------------------
@@ -1113,10 +1141,10 @@
         encerrar: function (b) { ocupado(b, true); chamar('aoVivoEncerrar').then(function () { toast('Quiz ao vivo encerrado.', 'ok'); atualizar(); }).catch(falhou); }
       });
     }
-    function atualizar() { chamar('aoVivoPainel').then(desenhar).catch(function (e) { if (!sessaoInvalida(e) && !atual) telaErro(e.message, telaAoVivoTV); }); }
+    function atualizar() { return chamar('aoVivoPainel').then(desenhar).catch(function (e) { if (!sessaoInvalida(e) && !atual) telaErro(e.message, telaAoVivoTV); }); }
     carregando();
     atualizar();
-    estado.timers.push(setInterval(atualizar, 2500));
+    consultarSempre(atualizar, 2500, 4000);
   }
 
   // ---------------------------------------------------------------------------

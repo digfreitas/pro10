@@ -28,7 +28,16 @@ var Api = (function () {
     return JSON.parse(JSON.stringify(r));
   }
 
-  function chamar(acao, dados) {
+  // "Ocupado" significa que o servidor não gravou nada, então é seguro tentar de novo sozinho.
+  function chamar(acao, dados, tentativa) {
+    return chamarUmaVez(acao, dados).then(function (r) {
+      var n = tentativa || 0;
+      if (demo || r.ok || !/ocupado/i.test(r.erro || '') || n >= 2) return r;
+      return new Promise(function (ok) { setTimeout(ok, 2000 + Math.random() * 3000); }).then(function () { return chamar(acao, dados, n + 1); });
+    });
+  }
+
+  function chamarUmaVez(acao, dados) {
     var req = Object.assign({ acao: acao }, dados || {});
     if (demo) {
       return new Promise(function (ok) { setTimeout(function () { ok(executarDemo(req)); }, 120); });
