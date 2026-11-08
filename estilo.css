@@ -298,11 +298,6 @@ select.entrada { appearance: auto; }
 .abas button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--claro); font-weight: 600; cursor: pointer; }
 .abas button[aria-pressed="true"] { background: var(--branco); color: var(--navy); font-weight: 700; }
 .pos { width: 30px; text-align: center; font-family: var(--fonte-num); font-size: 20px; font-weight: 700; color: var(--muted); }
-.duelo { display: flex; align-items: center; gap: 10px; }
-.duelo span:first-child { width: 64px; font-weight: 600; font-size: 14px; }
-.duelo .barra { flex: 1; height: 22px; border-radius: 6px; }
-.duelo .barra > div { border-radius: 6px; }
-.duelo .num { width: 32px; text-align: right; font-size: 18px; }
 
 /* Perfil */
 .grafico { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 14px; align-items: end; height: 120px; border-bottom: 1px solid var(--linha-2); }
@@ -386,8 +381,6 @@ details.cartao summary { cursor: pointer; font-weight: 700; min-height: 32px; di
 .tv-opcao.certa .tv-letra { background: var(--branco); color: var(--verde); }
 .tv-alt { font-size: clamp(18px, 2.2vw, 27px); font-weight: 700; line-height: 1.15; }
 .tv-rodape { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: clamp(15px, 1.6vw, 20px); color: var(--claro); }
-.tv-placar { display: flex; align-items: center; gap: 18px; padding: 10px 20px; border-radius: 14px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); font-size: 20px; font-weight: 600; }
-.tv-placar .num { font-size: 34px; }
 .tv-acoes { display: flex; gap: 12px; flex-wrap: wrap; }
 .tv-sair { position: absolute; top: 12px; right: 12px; color: var(--claro); font-size: 14px; text-decoration: none; padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,.06); z-index: 5; }
 .tv-sair:hover { color: var(--branco); }

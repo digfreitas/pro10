@@ -698,14 +698,20 @@
   // ---------------------------------------------------------------------------
   function telaAoVivo() {
     var ultimo = '', enviando = '';
-    var atual = null;
+    var atual = null, ultimoPlacar = null;
+    function textoPlacar(m) {
+      return m.acertos ? 'Você: ' + m.acertos + (m.acertos === 1 ? ' acerto' : ' acertos') + ' · ' + m.pos + 'º lugar' : 'Você ainda não pontuou neste quiz';
+    }
     function desenhar(r) {
       atual = r;
+      if (r.meu_placar) ultimoPlacar = r.meu_placar;
       var chave = JSON.stringify(r) + '|' + enviando;
       if (chave === ultimo) return;
       ultimo = chave;
       var corpo, titulo = '';
-      if (!r.ativo) {
+      if (!r.ativo && ultimoPlacar) {
+        corpo = '<div class="resultado"><span class="circulo" style="background:var(--cinza-suave);color:var(--navy-2)">' + I('trofeu', 34) + '</span><h2>Quiz encerrado</h2><p>' + esc(ultimoPlacar.acertos ? textoPlacar(ultimoPlacar) + '. Confira o pódio na TV.' : 'Valeu por participar! Confira o pódio na TV.') + '</p><a class="botao botao-contorno" href="#/quiz">Voltar ao quiz</a></div>';
+      } else if (!r.ativo) {
         corpo = '<div class="resultado"><span class="circulo" style="background:var(--cinza-suave);color:var(--navy-2)">' + I('vivo', 34) + '</span><h2>Nenhum quiz ao vivo agora</h2><p>Na reunião, quando o líder abrir o quiz, as perguntas aparecem aqui sozinhas.</p><a class="botao botao-contorno" href="#/quiz">Voltar ao quiz</a></div>';
       } else if (!r.pergunta) {
         corpo = '<div class="resultado"><span class="giro"></span><h2>Aguardando a próxima pergunta</h2><p>Fique de olho na TV.</p></div>';
@@ -721,6 +727,7 @@
         if (!r.revelada) corpo += minha ? '<div class="cartao-azul">' + I('relogio', 22, '#1D5FA8') + '<span>Resposta enviada. Aguarde o líder mostrar a resposta na TV.</span></div>' : '<p class="muted" style="text-align:center">Toque na alternativa para responder. Só o acerto conta, não a velocidade.</p>';
         else if (!r.minha_resposta) corpo += '<div class="cartao-azul">' + I('info', 22, '#1D5FA8') + '<span>Você não respondeu esta.</span></div>';
         else corpo += feedback({ correta: r.acertei, pontos: r.pontos, explicacao: r.explicacao, fonte: r.fonte });
+        if (r.revelada && r.meu_placar) corpo += '<div class="cartao-azul">' + I('trofeu', 22, '#1D5FA8') + '<span>' + esc(textoPlacar(r.meu_placar)) + '</span></div>';
       }
       render(paginaSimples('<header class="cab-escuro"><a class="voltar" style="color:#fff" href="#/quiz">' + I('voltar', 20) + 'Quiz</a><span class="rotulo pessego">Quiz ao vivo</span>' + titulo + '</header><main class="conteudo">' + corpo + '</main>'), {
         responder: function (b) {
@@ -809,13 +816,6 @@
         }
         if (r.nivel_equipe) blocos.push('<div class="cartao"><span class="rotulo">Acelerador da equipe</span>' + acelerador(r.nivel_equipe, false, 'média de ' + r.nivel_equipe.media + ' pts por pessoa no mês') + '</div>');
         blocos.push('<div class="cartao linha-flex"><span class="icone-q">' + I('presente', 22) + '</span><div class="texto-flex"><span class="rotulo laranja">Reconhecimento do mês</span><span class="nome">1º lugar: ' + esc(r.premio_mes) + '</span><span class="muted">Mais evoluiu: ' + esc(r.premio_evolucao) + '</span></div></div>');
-        if (r.placar_turnos && r.placar_turnos.length > 1 && r.placar_turnos.some(function (t) { return t.acertos > 0; })) {
-          var max = Math.max.apply(null, r.placar_turnos.map(function (t) { return t.acertos; }).concat([1]));
-          var cores = ['var(--laranja)', 'var(--azul)', 'var(--verde)', 'var(--navy-2)'];
-          blocos.push('<div class="cartao"><div class="texto-flex"><span class="rotulo">Quiz ao vivo · placar do mês</span><span class="h3">Duelo de turnos</span></div>' + r.placar_turnos.map(function (t, i) {
-            return '<div class="duelo"><span>Turno ' + esc(t.turno) + '</span><div class="barra"><div style="width:' + Math.round(t.acertos / max * 100) + '%;background:' + cores[i % cores.length] + '"></div></div><span class="num">' + t.acertos + '</span></div>';
-          }).join('') + '<span class="muted">Acertos somados nas reuniões do mês</span></div>');
-        }
         blocos.push(cartaoMeta(r.meta_coletiva));
         render(paginaEquipe('ranking', cab + '<main class="conteudo">' + blocos.join('') + '</main>'), {
           aba: function (b) { aba = b.getAttribute('data-v'); desenhar(); }
@@ -1099,24 +1099,42 @@
   // Líder: quiz ao vivo na TV
   // ---------------------------------------------------------------------------
   function telaAoVivoTV() {
-    var ultimo = '', atual = null;
-    function placar(lista) {
-      if (!lista || !lista.length) return '';
-      return '<div class="tv-placar">' + lista.map(function (t) { return '<span>Turno ' + esc(t.turno) + ' <b class="num">' + t.acertos + '</b></span>'; }).join('<span style="color:var(--claro)">×</span>') + '</div>';
+    var ultimo = '', atual = null, verPlacar = '', podio = null;
+    // Linhas do placar. No pódio, as posições aparecem de baixo para cima, até o 1º lugar.
+    function linhasPlacar(lista, mais, deBaixoParaCima) {
+      if (!lista.length) return '<p class="tv-pergunta" style="font-size:clamp(22px,3vw,34px);text-align:center">Ninguém pontuou ainda</p>';
+      return '<div class="tv-lista">' + lista.map(function (p, i) {
+        var atraso = deBaixoParaCima ? (lista.length - 1 - i) * 0.7 : i * 0.12;
+        return '<div class="tv-linha entra' + (p.pos === 1 ? ' primeiro' : '') + '" style="animation-delay:' + atraso + 's"><span class="tv-pos">' + p.pos + 'º</span>' + A(p.avatar, 44) + '<span class="tv-nome">' + esc(p.nome) + '</span><span class="tv-pts">' + p.acertos + (p.acertos === 1 ? ' acerto' : ' acertos') + '</span></div>';
+      }).join('') + (mais ? '<p class="tv-sub" style="text-align:center">+' + mais + ' empatados</p>' : '') + '</div>';
+    }
+    function desenharPodio() {
+      render('<div class="tv">' + (podio.podio.length ? confetes(16) : '') + '<a class="tv-sair" href="#/lider/validar">Sair da TV</a><div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Quiz ao vivo · resultado final</span><h1 class="tv-titulo">Pódio do quiz</h1></div></div>' +
+        '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;width:100%;max-width:900px;margin:0 auto">' + linhasPlacar(podio.podio, podio.podio_mais, true) + '</div>' +
+        '<div class="tv-rodape"><span>Os pontos já entraram no Placar da Oficina</span><div class="tv-acoes"><button type="button" class="botao tv-botao" style="width:auto;padding:0 28px" data-acao="fecharPodio">Concluir</button></div></div></div>', {
+        fecharPodio: function () { podio = null; ultimo = ''; atualizar(); }
+      });
     }
     function desenhar(r) {
       atual = r;
-      var k = JSON.stringify(r);
+      if (podio) return;
+      var k = JSON.stringify(r) + '|' + verPlacar;
       if (k === ultimo) return;
       ultimo = k;
       var html;
       if (!r.ativo) {
-        html = '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · reunião semanal</span><h1 class="tv-titulo">Quiz ao vivo</h1><span class="tv-sub">' + r.lista.length + ' perguntas prontas · ' + r.participantes + ' pessoas na equipe</span></div>' + placar(r.placar_turnos) + '</div>' +
+        html = '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · reunião semanal</span><h1 class="tv-titulo">Quiz ao vivo</h1><span class="tv-sub">' + r.lista.length + ' perguntas prontas · ' + r.participantes + ' pessoas na equipe</span></div></div>' +
           '<div class="tv-cartao" style="flex:1;justify-content:center;max-width:900px;margin:0 auto;width:100%">' + I('vivo', 64, '#FDBA74', 1.6) +
           '<p class="tv-pergunta" style="font-size:clamp(24px,3vw,38px)">Peça para todos abrirem o app no celular: Quiz › Quiz ao vivo</p><p class="tv-sub">Todos respondem no próprio celular. Pontos só pelo acerto, sem bônus de velocidade.</p>' +
           (r.lista.length ? '<button type="button" class="botao tv-botao" style="max-width:420px;margin-top:16px" data-acao="iniciar">Iniciar quiz ao vivo</button>' : '<p class="tv-sub" style="color:var(--pessego)">Ainda não há perguntas na categoria Quiz ao vivo. Cadastre em Perguntas.</p>') + '</div>';
       } else if (!r.pergunta) {
         html = '<div class="tv-cartao" style="flex:1;justify-content:center"><span class="giro"></span><p class="tv-sub">Carregando a pergunta…</p></div>';
+      } else if (r.revelada && verPlacar === r.pergunta.id) {
+        html = '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Quiz ao vivo · pergunta ' + r.indice + ' de ' + r.total + '</span><h1 class="tv-titulo">Placar do quiz</h1></div></div>' +
+          '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;width:100%;max-width:900px;margin:0 auto">' + linhasPlacar(r.placar, r.placar_mais, false) + '</div>' +
+          '<div class="tv-rodape"><span>Só o acerto conta, sem bônus de velocidade</span><div class="tv-acoes">' +
+          (r.proxima_id ? '<button type="button" class="botao tv-botao" style="width:auto;padding:0 28px" data-acao="proxima">Próxima pergunta</button><button type="button" class="botao botao-claro tv-botao" style="width:auto;padding:0 28px" data-acao="encerrar">Encerrar quiz</button>' : '<button type="button" class="botao tv-botao" style="width:auto;padding:0 28px" data-acao="encerrar">Ver pódio final</button>') +
+          '</div></div>';
       } else {
         var q = r.pergunta, tot = Math.max(1, r.respostas);
         var opcoes = q.alternativas.map(function (a) {
@@ -1129,16 +1147,17 @@
           ? '<span class="subir" style="display:flex;align-items:center;gap:10px">' + I('doc', 26, '#FDBA74', 1.8) + 'Fonte: ' + esc(q.fonte || '—') + ' · ' + r.acertos + ' de ' + r.respostas + ' acertaram</span>'
           : '<span style="display:flex;gap:22px;flex-wrap:wrap"><span>' + r.respostas + ' de ' + r.participantes + ' responderam</span><span>Pontos só pelo acerto, sem bônus de velocidade</span></span>';
         var botoes = r.revelada
-          ? (r.proxima_id ? '<button type="button" class="botao tv-botao" style="width:auto;padding:0 28px" data-acao="proxima">Próxima pergunta</button>' : '') + '<button type="button" class="botao botao-claro tv-botao" style="width:auto;padding:0 28px" data-acao="encerrar">Encerrar quiz</button>'
+          ? '<button type="button" class="botao tv-botao" style="width:auto;padding:0 28px" data-acao="verPlacar">Ver placar</button>'
           : '<button type="button" class="botao tv-botao" style="width:auto;padding:0 28px" data-acao="revelar">Mostrar resposta</button>';
-        html = '<div class="tv-cab" style="align-items:center"><div style="display:flex;align-items:center;gap:14px"><span class="chip" style="background:var(--laranja);color:#fff;font-size:16px;padding:8px 14px;letter-spacing:1px;text-transform:uppercase">Quiz ao vivo</span><span class="tv-sub">Pergunta ' + r.indice + ' de ' + r.total + '</span></div>' + placar(r.placar_turnos) + '</div>' +
+        html = '<div class="tv-cab" style="align-items:center"><div style="display:flex;align-items:center;gap:14px"><span class="chip" style="background:var(--laranja);color:#fff;font-size:16px;padding:8px 14px;letter-spacing:1px;text-transform:uppercase">Quiz ao vivo</span><span class="tv-sub">Pergunta ' + r.indice + ' de ' + r.total + '</span></div></div>' +
           '<h1 class="tv-pergunta">' + esc(q.texto) + '</h1><div class="tv-opcoes">' + opcoes + '</div><div class="tv-rodape">' + rodape + '<div class="tv-acoes">' + botoes + '</div></div>';
       }
       render('<div class="tv"><a class="tv-sair" href="#/lider/validar">Sair da TV</a>' + html + '</div>', {
         iniciar: function (b) { ocupado(b, true); chamar('aoVivoIniciar').then(atualizar).catch(function (e) { ocupado(b, false); falhou(e); }); },
         revelar: function (b) { ocupado(b, true); chamar('aoVivoRevelar').then(atualizar).catch(falhou); },
         proxima: function (b) { ocupado(b, true); chamar('aoVivoAbrir', { pergunta_id: atual.proxima_id }).then(atualizar).catch(falhou); },
-        encerrar: function (b) { ocupado(b, true); chamar('aoVivoEncerrar').then(function () { toast('Quiz ao vivo encerrado.', 'ok'); atualizar(); }).catch(falhou); }
+        verPlacar: function () { verPlacar = atual.pergunta.id; desenhar(atual); },
+        encerrar: function (b) { ocupado(b, true); chamar('aoVivoEncerrar').then(function (x) { podio = x; verPlacar = ''; desenharPodio(); }).catch(falhou); }
       });
     }
     function atualizar() { return chamar('aoVivoPainel').then(desenhar).catch(function (e) { if (!sessaoInvalida(e) && !atual) telaErro(e.message, telaAoVivoTV); }); }

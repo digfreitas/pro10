@@ -546,16 +546,29 @@ var Logica = (function () {
     return n;
   }
   function mesChave(ctx) { var p = partes(ctx.agora, ctx.fuso); return p.a + '-' + dois(p.m + 1); }
-  function placarTurnos(ctx) {
-    var ini = inicioMes(ctx.agora, ctx.fuso);
-    var mapa = {};
-    pessoasAtivas(ctx).filter(daEquipe).forEach(function (p) { if (txt(p.turno)) mapa[txt(p.turno)] = 0; });
+  // Placar individual do quiz ao vivo em andamento. Conta os acertos, e não os pontos, para continuar
+  // valendo para quem já bateu o limite semanal. A pergunta em aberto fica de fora até a resposta
+  // ser mostrada, senão o placar entregaria quem acertou. Quem empata divide a posição.
+  function placarAoVivo(ctx, sessao) {
+    var aberta = sim(ctx.cfg.aovivo_revelada) ? '' : txt(ctx.cfg.aovivo_pergunta);
+    var acertos = {};
     ctx.t('AoVivo').forEach(function (r) {
-      if (!sim(r.correta) || lerData(r.criado_em, ctx.fuso) < ini) return;
-      var p = pessoaPorId(ctx, r.pessoa_id);
-      if (p && txt(p.turno)) mapa[txt(p.turno)] = (mapa[txt(p.turno)] || 0) + 1;
+      if (txt(r.sessao) !== sessao || !sim(r.correta) || txt(r.pergunta_id) === aberta) return;
+      acertos[txt(r.pessoa_id)] = (acertos[txt(r.pessoa_id)] || 0) + 1;
     });
-    return Object.keys(mapa).sort().map(function (t) { return { turno: t, acertos: mapa[t] }; });
+    var lista = pessoasAtivas(ctx).filter(function (p) { return daEquipe(p) && acertos[txt(p.id)]; }).map(function (p) {
+      return { id: txt(p.id), nome: txt(p.nome), avatar: avatarDe(p), acertos: acertos[txt(p.id)] };
+    }).sort(function (a, b) { return b.acertos - a.acertos || a.nome.localeCompare(b.nome, 'pt-BR'); });
+    lista.forEach(function (x, i) { x.pos = i && lista[i - 1].acertos === x.acertos ? lista[i - 1].pos : i + 1; });
+    return lista;
+  }
+  // O que vai para a TV: só o topo, em no máximo 8 linhas. Quem ficou de fora por empate vira "+N empatados".
+  function topoAoVivo(lista, ultimaPos) {
+    var topo = lista.filter(function (x) { return x.pos <= ultimaPos; });
+    return {
+      lista: topo.slice(0, 8).map(function (x) { return { pos: x.pos, nome: x.nome, avatar: x.avatar, acertos: x.acertos }; }),
+      mais: Math.max(0, topo.length - 8)
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -918,7 +931,6 @@ var Logica = (function () {
         var mes = calcularRanking(ctx, inicioMes(ctx.agora, ctx.fuso), ctx.agora + 1);
         out.ao_vivo = { semana: sem.slice(0, top), mes: mes.slice(0, top), minha_semana: minha(sem), minha_mes: minha(mes) };
       }
-      if (mods.aovivo) out.placar_turnos = placarTurnos(ctx);
       return out;
     },
 
@@ -1004,7 +1016,8 @@ var Logica = (function () {
       if (!q) return { ok: true, ativo: true, pergunta: null };
       var revelada = sim(ctx.cfg.aovivo_revelada);
       var minha = ctx.t('AoVivo').filter(function (r) { return txt(r.sessao) === sessao && txt(r.pergunta_id) === txt(q.id) && txt(r.pessoa_id) === txt(pessoa.id); })[0];
-      var out = { ok: true, ativo: true, revelada: revelada, pergunta: { id: txt(q.id), texto: txt(q.texto), alternativas: alternativas(q) }, minha_resposta: minha ? txt(minha.resposta) : '' };
+      var eu = placarAoVivo(ctx, sessao).filter(function (x) { return x.id === txt(pessoa.id); })[0];
+      var out = { ok: true, ativo: true, revelada: revelada, pergunta: { id: txt(q.id), texto: txt(q.texto), alternativas: alternativas(q) }, minha_resposta: minha ? txt(minha.resposta) : '', meu_placar: { acertos: eu ? eu.acertos : 0, pos: eu ? eu.pos : 0 } };
       if (revelada) {
         out.correta_letra = txt(q.correta).toUpperCase();
         out.acertei = !!minha && sim(minha.correta);
@@ -1358,7 +1371,7 @@ var Logica = (function () {
       var lista = perguntasAtivas(ctx).filter(function (q) { return txt(q.categoria) === 'aovivo'; })
         .sort(function (a, b) { return num(a.ordem, 0) - num(b.ordem, 0); })
         .map(function (q) { return { id: txt(q.id), texto: txt(q.texto) }; });
-      var out = { ok: true, ativo: sessao !== '', lista: lista, placar_turnos: placarTurnos(ctx), participantes: pessoasAtivas(ctx).filter(daEquipe).length };
+      var out = { ok: true, ativo: sessao !== '', lista: lista, participantes: pessoasAtivas(ctx).filter(daEquipe).length };
       var q = sessao ? perguntaPorId(ctx, ctx.cfg.aovivo_pergunta) : null;
       if (q) {
         var resp = ctx.t('AoVivo').filter(function (r) { return txt(r.sessao) === sessao && txt(r.pergunta_id) === txt(q.id); });
@@ -1373,6 +1386,9 @@ var Logica = (function () {
         out.respostas = resp.length;
         out.acertos = resp.filter(function (r) { return sim(r.correta); }).length;
         out.distribuicao = dist;
+        var topo = topoAoVivo(placarAoVivo(ctx, sessao), 5);
+        out.placar = topo.lista;
+        out.placar_mais = topo.mais;
         out.proxima_id = idx >= 0 && idx + 1 < lista.length ? lista[idx + 1].id : '';
       }
       return out;
@@ -1404,10 +1420,12 @@ var Logica = (function () {
     },
 
     aoVivoEncerrar: function (ctx) {
+      var sessao = txt(ctx.cfg.aovivo_sessao);
+      var podio = sessao ? topoAoVivo(placarAoVivo(ctx, sessao), 3) : { lista: [], mais: 0 };
       gravarConfig(ctx, 'aovivo_sessao', '');
       gravarConfig(ctx, 'aovivo_pergunta', '');
       gravarConfig(ctx, 'aovivo_revelada', 'nao');
-      return { ok: true };
+      return { ok: true, podio: podio.lista, podio_mais: podio.mais };
     }
   };
 
