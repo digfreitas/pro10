@@ -53,7 +53,7 @@ var Logica = (function () {
     ['fuso_minutos', '-180', 'Fuso horário em minutos (Brasil, horário de Brasília: -180)'],
     ['meta_mensal', '200', 'Meta mensal de pontos de cada pessoa (quem bate chega ao último nível)'],
     ['atraso_percentual', '50', 'Quanto vale uma entrega atrasada (% dos pontos)'],
-    ['marcar_ate_horas', '24', 'Até quantas horas depois a pessoa pode marcar'],
+    ['marcar_ate_dias', '3', 'Até quantos dias depois a pessoa pode marcar (cobre as folgas da escala)'],
     ['janelas_ativas', 'sim', 'Usar janelas de registro por turno (sim/nao)'],
     ['taxa_sorteio', '10', 'Chance de uma entrega ser sorteada para conferência (%)'],
     ['amostragem_adaptativa', 'nao', 'Aumentar a taxa para quem teve divergência nos últimos 30 dias (sim/nao)'],
@@ -63,8 +63,10 @@ var Logica = (function () {
     ['pontos_dominio', '2', 'Pontos ao acertar uma pergunta que tinha errado'],
     ['pontos_aovivo', '2', 'Pontos por acerto no quiz ao vivo'],
     ['pontos_sugestao', '5', 'Pontos para quem cria uma pergunta aprovada'],
-    ['apuracao_dia', '5', 'Dia do Pit Stop, a apuração semanal (0 domingo, 1 segunda ... 5 sexta, 6 sábado)'],
-    ['apuracao_hora', '09:00', 'Hora do Pit Stop'],
+    ['apuracao_data', '', 'Data do próximo Pit Stop (aaaa-mm-dd). Vazio: a definir'],
+    ['apuracao_hora', '09:00', 'Hora do próximo Pit Stop'],
+    ['mural_texto', '', 'Aviso do líder para a equipe'],
+    ['mural_em', '', 'Uso interno: quando o aviso foi publicado'],
     ['top_publico', '5', 'Quantas posições ficam visíveis para todos'],
     ['premio_mes', '[PRÊMIO DEFINIDO PELA EQUIPE]', 'Prêmio do 1º lugar do mês'],
     ['premio_evolucao', '[RECONHECIMENTO]', 'Reconhecimento de quem mais evoluiu'],
@@ -88,36 +90,37 @@ var Logica = (function () {
   ];
 
   var EDITAVEIS = [
-    { chave: 'nome_app', rotulo: 'Nome do app', tipo: 'texto', grupo: 'Identidade e níveis' },
-    { chave: 'slogan', rotulo: 'Frase da entrada', tipo: 'texto', grupo: 'Identidade e níveis' },
-    { chave: 'msg_validada', rotulo: 'Mensagem de entrega validada', tipo: 'texto', grupo: 'Identidade e níveis' },
-    { chave: 'nivel_prefixo', rotulo: 'Nome dos níveis (ex.: Ponto)', tipo: 'texto', grupo: 'Identidade e níveis' },
-    { chave: 'nivel_total', rotulo: 'Quantidade de níveis (3 a 10)', tipo: 'numero', grupo: 'Identidade e níveis' },
-    { chave: 'meta_mensal', rotulo: 'Meta mensal de pontos (= último nível)', tipo: 'numero', grupo: 'Pontos' },
-    { chave: 'atraso_percentual', rotulo: 'Entrega atrasada vale (%)', tipo: 'numero', grupo: 'Pontos' },
-    { chave: 'marcar_ate_horas', rotulo: 'Pode marcar até (horas depois)', tipo: 'numero', grupo: 'Pontos' },
-    { chave: 'janelas_ativas', rotulo: 'Usar janelas de registro por turno', tipo: 'simnao', grupo: 'Janelas' },
-    { chave: 'taxa_sorteio', rotulo: 'Taxa de sorteio (%)', tipo: 'numero', grupo: 'Sorteio' },
-    { chave: 'amostragem_adaptativa', rotulo: 'Reforçar sorteio após divergência', tipo: 'simnao', grupo: 'Sorteio' },
-    { chave: 'taxa_sorteio_reforcada', rotulo: 'Taxa reforçada (%)', tipo: 'numero', grupo: 'Sorteio' },
-    { chave: 'limite_quiz_semana', rotulo: 'Limite do quiz por semana (pts)', tipo: 'numero', grupo: 'Quiz' },
-    { chave: 'repeticao_dias', rotulo: 'Pergunta errada volta após (dias)', tipo: 'numero', grupo: 'Quiz' },
-    { chave: 'apuracao_dia', rotulo: 'Dia do Pit Stop', tipo: 'dia', grupo: 'Placar e Pit Stop' },
-    { chave: 'apuracao_hora', rotulo: 'Hora do Pit Stop', tipo: 'hora', grupo: 'Placar e Pit Stop' },
+    { chave: 'apuracao_data', rotulo: 'Data do próximo Pit Stop', tipo: 'data', grupo: 'Placar e Pit Stop' },
+    { chave: 'apuracao_hora', rotulo: 'Hora do próximo Pit Stop', tipo: 'hora', grupo: 'Placar e Pit Stop' },
     { chave: 'top_publico', rotulo: 'Posições visíveis para todos', tipo: 'numero', grupo: 'Placar e Pit Stop' },
     { chave: 'premio_mes', rotulo: 'Prêmio do 1º lugar do mês', tipo: 'texto', grupo: 'Placar e Pit Stop' },
     { chave: 'premio_evolucao', rotulo: 'Reconhecimento de quem mais evoluiu', tipo: 'texto', grupo: 'Placar e Pit Stop' },
-    { chave: 'selo_prata', rotulo: 'Meses com o mesmo selo para a prata', tipo: 'numero', grupo: 'Selos' },
-    { chave: 'selo_ouro', rotulo: 'Meses com o mesmo selo para o ouro', tipo: 'numero', grupo: 'Selos' },
-    { chave: 'pin_max_erros', rotulo: 'Erros seguidos de PIN até travar (3 a 20)', tipo: 'numero', grupo: 'Segurança' },
-    { chave: 'pin_bloqueio_min', rotulo: 'Tempo travado, em minutos (1 a 1440)', tipo: 'numero', grupo: 'Segurança' },
-    { chave: 'modulo_quiz', rotulo: 'Quiz', tipo: 'simnao', grupo: 'Módulos' },
-    { chave: 'modulo_sorteio', rotulo: 'Sorteio de conferência', tipo: 'simnao', grupo: 'Módulos' },
-    { chave: 'modulo_apuracao', rotulo: 'Posições só no Pit Stop', tipo: 'simnao', grupo: 'Módulos' },
-    { chave: 'modulo_avatar', rotulo: 'Escolha de avatar', tipo: 'simnao', grupo: 'Módulos' },
-    { chave: 'modulo_celebracao', rotulo: 'Celebração ao validar', tipo: 'simnao', grupo: 'Módulos' },
-    { chave: 'modulo_aovivo', rotulo: 'Quiz ao vivo', tipo: 'simnao', grupo: 'Módulos' },
-    { chave: 'modulo_sugestoes', rotulo: 'Perguntas criadas pela equipe', tipo: 'simnao', grupo: 'Módulos' }
+    { chave: 'meta_mensal', rotulo: 'Meta mensal de pontos (= último nível)', tipo: 'numero', grupo: 'Regras da equipe' },
+    { chave: 'marcar_ate_dias', rotulo: 'Pode marcar até quantos dias depois (0 a 14)', tipo: 'numero', grupo: 'Regras da equipe' },
+    { chave: 'janelas_ativas', rotulo: 'Usar janelas de registro por turno', tipo: 'simnao', grupo: 'Regras da equipe' },
+    // Daqui em diante, só o Administrador vê e altera
+    { chave: 'nome_app', rotulo: 'Nome do app', tipo: 'texto', grupo: 'Identidade e níveis', admin: true },
+    { chave: 'slogan', rotulo: 'Frase da entrada', tipo: 'texto', grupo: 'Identidade e níveis', admin: true },
+    { chave: 'msg_validada', rotulo: 'Mensagem de entrega validada', tipo: 'texto', grupo: 'Identidade e níveis', admin: true },
+    { chave: 'nivel_prefixo', rotulo: 'Nome dos níveis (ex.: Ponto)', tipo: 'texto', grupo: 'Identidade e níveis', admin: true },
+    { chave: 'nivel_total', rotulo: 'Quantidade de níveis (3 a 10)', tipo: 'numero', grupo: 'Identidade e níveis', admin: true },
+    { chave: 'atraso_percentual', rotulo: 'Entrega atrasada vale (%)', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'taxa_sorteio', rotulo: 'Taxa de sorteio (%)', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'amostragem_adaptativa', rotulo: 'Reforçar sorteio após divergência', tipo: 'simnao', grupo: 'Regras do programa', admin: true },
+    { chave: 'taxa_sorteio_reforcada', rotulo: 'Taxa reforçada (%)', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'limite_quiz_semana', rotulo: 'Limite do quiz por semana (pts)', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'repeticao_dias', rotulo: 'Pergunta errada volta após (dias)', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'selo_prata', rotulo: 'Meses com o mesmo selo para a prata', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'selo_ouro', rotulo: 'Meses com o mesmo selo para o ouro', tipo: 'numero', grupo: 'Regras do programa', admin: true },
+    { chave: 'pin_max_erros', rotulo: 'Erros seguidos de PIN até travar (3 a 20)', tipo: 'numero', grupo: 'Segurança', admin: true },
+    { chave: 'pin_bloqueio_min', rotulo: 'Tempo travado, em minutos (1 a 1440)', tipo: 'numero', grupo: 'Segurança', admin: true },
+    { chave: 'modulo_quiz', rotulo: 'Quiz', tipo: 'simnao', grupo: 'Módulos', admin: true },
+    { chave: 'modulo_sorteio', rotulo: 'Sorteio de conferência', tipo: 'simnao', grupo: 'Módulos', admin: true },
+    { chave: 'modulo_apuracao', rotulo: 'Posições só no Pit Stop', tipo: 'simnao', grupo: 'Módulos', admin: true },
+    { chave: 'modulo_avatar', rotulo: 'Escolha de avatar', tipo: 'simnao', grupo: 'Módulos', admin: true },
+    { chave: 'modulo_celebracao', rotulo: 'Celebração ao validar', tipo: 'simnao', grupo: 'Módulos', admin: true },
+    { chave: 'modulo_aovivo', rotulo: 'Quiz ao vivo', tipo: 'simnao', grupo: 'Módulos', admin: true },
+    { chave: 'modulo_sugestoes', rotulo: 'Perguntas criadas pela equipe', tipo: 'simnao', grupo: 'Módulos', admin: true }
   ];
 
   var DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
@@ -162,6 +165,7 @@ var Logica = (function () {
   function inicioSemana(ts, fuso) { var p = partes(ts, fuso); return inicioDia(ts, fuso) - ((p.sem + 6) % 7) * DIA; }
   function inicioMes(ts, fuso) { var p = partes(ts, fuso); return Date.UTC(p.a, p.m, 1) - fuso * MIN; }
   function fmtData(ts, fuso) { var p = partes(ts, fuso); return dois(p.d) + '/' + dois(p.m + 1); }
+  function isoData(ts, fuso) { if (!ts) return ''; var p = partes(ts, fuso); return p.a + '-' + dois(p.m + 1) + '-' + dois(p.d); }
   function fmtHora(ts, fuso) { var p = partes(ts, fuso); return dois(p.h) + ':' + dois(p.mi); }
   function fmtMin(m) { return dois(Math.floor(m / 60) % 24) + ':' + dois(m % 60); }
   function fmtDiaData(ts, fuso) { return DIAS_CURTOS[partes(ts, fuso).sem] + ', ' + fmtData(ts, fuso); }
@@ -255,8 +259,10 @@ var Logica = (function () {
   // Pessoas, tipos e registros
   // ---------------------------------------------------------------------------
   function pessoasAtivas(ctx) { return ctx.t('Pessoas').filter(function (p) { return txt(p.id) && sim(p.ativo); }); }
-  function daEquipe(p) { return txt(p.papel).toLowerCase() !== 'lider'; }
-  function ehLider(p) { return txt(p.papel).toLowerCase() === 'lider'; }
+  // Papéis: equipe, lider (o supervisor) e admin (tudo do líder, mais as regras do programa)
+  function ehAdmin(p) { return txt(p.papel).toLowerCase() === 'admin'; }
+  function ehLider(p) { var c = txt(p.papel).toLowerCase(); return c === 'lider' || c === 'admin'; }
+  function daEquipe(p) { return !ehLider(p); }
   function pessoaPorId(ctx, id) { return ctx.t('Pessoas').filter(function (p) { return txt(p.id) === txt(id); })[0] || null; }
   function tipoPorId(ctx, id) { return ctx.t('TiposEntrega').filter(function (t) { return txt(t.id) === txt(id); })[0] || null; }
   function nomeTipo(ctx, id) { if (TIPOS_ESPECIAIS[id]) return TIPOS_ESPECIAIS[id]; var t = tipoPorId(ctx, id); return t ? txt(t.nome) : 'Entrega'; }
@@ -322,6 +328,11 @@ var Logica = (function () {
       db.atualizar('Pessoas', 'id', txt(p.id), { codigo: c });
       n++;
     });
+    // Planilha de versão anterior não tem Administrador: o primeiro líder da lista passa a ser
+    if (!pessoas.some(ehAdmin)) {
+      var primeiro = pessoas.filter(function (p) { return txt(p.id) && ehLider(p); })[0];
+      if (primeiro) { db.atualizar('Pessoas', 'id', txt(primeiro.id), { papel: 'admin' }); n++; }
+    }
     return n;
   }
 
@@ -402,7 +413,16 @@ var Logica = (function () {
     }).filter(function (a) { return a.fim > 0; }).sort(function (a, b) { return a.fim - b.fim; });
   }
   function ultimaApuracao(ctx) { var l = apuracoes(ctx); return l.length ? l[l.length - 1] : null; }
-  function inicioPeriodo(ctx) { var u = ultimaApuracao(ctx); return u ? u.fim : inicioSemana(ctx.agora, ctx.fuso); }
+  // O período vai do último Pit Stop até agora. No primeiro, conta desde o primeiro registro do app.
+  function inicioPeriodo(ctx) {
+    var u = ultimaApuracao(ctx);
+    if (u) return u.fim;
+    var primeiro = inicioSemana(ctx.agora, ctx.fuso);
+    ['Registros', 'Respostas', 'AoVivo'].forEach(function (tab) {
+      ctx.t(tab).forEach(function (r) { var ts = lerData(r.criado_em, ctx.fuso); if (ts && ts < primeiro) primeiro = ts; });
+    });
+    return primeiro;
+  }
   function calcularEvolucao(semana, anterior) {
     if (!anterior) return null;
     var mapa = {};
@@ -416,19 +436,17 @@ var Logica = (function () {
     return melhor;
   }
   function proximaApuracao(ctx) {
-    var dia = num(ctx.cfg.apuracao_dia, 5);
     var h = hhmm(ctx.cfg.apuracao_hora);
     if (h < 0) h = 540;
     var base = inicioDia(ctx.agora, ctx.fuso);
-    var ts = base + 7 * DIA + h * MIN;
-    for (var i = 0; i < 8; i++) {
-      var c = base + i * DIA + h * MIN;
-      if (partes(c, ctx.fuso).sem === dia && c > ctx.agora) { ts = c; break; }
-    }
-    var faltam = Math.round((inicioDia(ts, ctx.fuso) - base) / DIA);
+    var diaMarcado = txt(ctx.cfg.apuracao_data) ? lerData(ctx.cfg.apuracao_data, ctx.fuso) : 0;
+    // Sem data, ou com a data já passada, o aviso fica "a definir" até o líder marcar outra
+    if (!diaMarcado || diaMarcado < base) return { definida: false, texto: 'A definir', dia_nome: '', faltam_dias: null, faltam_texto: '' };
+    var ts = diaMarcado + h * MIN;
+    var faltam = Math.round((diaMarcado - base) / DIA);
     return {
-      ts: ts, texto: fmtDiaData(ts, ctx.fuso) + ' · ' + fmtMin(h),
-      dia_nome: DIAS[dia], faltam_dias: faltam,
+      definida: true, ts: ts, texto: fmtDiaData(ts, ctx.fuso) + ' · ' + fmtMin(h),
+      dia_nome: DIAS[partes(ts, ctx.fuso).sem], faltam_dias: faltam,
       faltam_texto: faltam === 0 ? 'hoje' : (faltam === 1 ? 'amanhã' : faltam + ' dias')
     };
   }
@@ -609,6 +627,7 @@ var Logica = (function () {
       falta_texto: falta >= 60 ? Math.floor(falta / 60) + 'h' + dois(falta % 60) : falta + ' min'
     };
   }
+  function diasParaMarcar(ctx) { return Math.max(0, Math.min(14, Math.floor(num(ctx.cfg.marcar_ate_dias, 3)))); }
   function exigirJanela(ctx, pessoa) {
     var j = estadoJanela(ctx, pessoa);
     if (!j.aberta) throw erro('O registro está fechado agora. Próxima janela: ' + j.proxima_texto + '.');
@@ -746,7 +765,8 @@ var Logica = (function () {
         nivel: nivelDe(ctx, pmes), mes_chave: mesChave(ctx),
         proxima_apuracao: proximaApuracao(ctx), pergunta_semana: semana, meta_coletiva: metaColetiva(ctx),
         celebrar: celebrar, recentes: recentes, aguardando_ref: aguardando,
-        aovivo_ativo: mods.aovivo && txt(ctx.cfg.aovivo_sessao) !== ''
+        aovivo_ativo: mods.aovivo && txt(ctx.cfg.aovivo_sessao) !== '',
+        mural: txt(ctx.cfg.mural_texto) ? { texto: txt(ctx.cfg.mural_texto), data: lerData(ctx.cfg.mural_em, fuso) ? fmtData(lerData(ctx.cfg.mural_em, fuso), fuso) : '' } : null
       };
     },
 
@@ -757,16 +777,20 @@ var Logica = (function () {
           referencia: (txt(t.referencia).toLowerCase() || 'nao'), dica_ref: txt(t.dica_ref)
         };
       });
-      return { ok: true, tipos: tipos, janela: estadoJanela(ctx, pessoa), pode_ontem: num(ctx.cfg.marcar_ate_horas, 24) >= 24, atraso_pct: num(ctx.cfg.atraso_percentual, 50) };
+      var dias = [];
+      for (var d = 0; d <= diasParaMarcar(ctx); d++) {
+        dias.push({ atras: d, texto: d === 0 ? 'Hoje' : (d === 1 ? 'Ontem' : fmtDiaData(ctx.agora - d * DIA, ctx.fuso)) });
+      }
+      return { ok: true, tipos: tipos, janela: estadoJanela(ctx, pessoa), dias: dias, atraso_pct: num(ctx.cfg.atraso_percentual, 50) };
     },
 
     marcar: function (ctx, req, pessoa) {
       exigirJanela(ctx, pessoa);
       var tipo = tipoPorId(ctx, req.tipo_id);
       if (!tipo || !sim(tipo.ativo)) throw erro('Entrega não encontrada.');
-      var quando = req.quando === 'ontem' ? 'ontem' : 'hoje';
-      if (quando === 'ontem' && num(ctx.cfg.marcar_ate_horas, 24) < 24) throw erro('Só dá pra marcar entregas de hoje.');
-      var dataExec = quando === 'ontem' ? ctx.agora - DIA : ctx.agora;
+      var atras = Math.floor(num(req.dias_atras, 0));
+      if (atras < 0 || atras > diasParaMarcar(ctx)) throw erro('Só dá pra marcar entregas de até ' + diasParaMarcar(ctx) + ' dias atrás.');
+      var dataExec = ctx.agora - atras * DIA;
       var exige = txt(tipo.referencia).toLowerCase() || 'nao';
       var ref = exige === 'nao' ? '' : txt(req.referencia).toUpperCase();
       if (exige === 'obrigatoria' && !ref) throw erro('Informe o número de referência (' + (txt(tipo.dica_ref) || 'ex.: nº da RAF') + ').');
@@ -778,7 +802,7 @@ var Logica = (function () {
         var n = regs.filter(function (r) {
           return txt(r.pessoa_id) === txt(pessoa.id) && txt(r.tipo_id) === txt(tipo.id) && txt(r.status) !== 'recusada' && inicioDia(lerData(r.data_execucao, ctx.fuso), ctx.fuso) === dia;
         }).length;
-        if (n >= max) throw erro('Você já marcou "' + txt(tipo.nome) + '" ' + (quando === 'ontem' ? 'ontem' : 'hoje') + '.');
+        if (n >= max) throw erro('Você já marcou "' + txt(tipo.nome) + '" ' + (atras === 0 ? 'hoje' : (atras === 1 ? 'ontem' : 'nesse dia')) + '.');
       }
       var alerta = ref ? checarRefDuplicada(ctx, tipo, ref, pessoa, null) : '';
       var sorteada = false;
@@ -1050,6 +1074,25 @@ var Logica = (function () {
     }
   };
 
+  function respostasDaPergunta(ctx, id) {
+    var n = 0;
+    ['Respostas', 'AoVivo'].forEach(function (tab) { ctx.t(tab).forEach(function (r) { if (txt(r.pergunta_id) === id) n++; }); });
+    return n;
+  }
+  function proximaOrdem(ctx, cat, trilha) {
+    var maior = 0;
+    ctx.t('Perguntas').forEach(function (x) {
+      if (txt(x.categoria) === cat && txt(x.status) !== 'excluida' && (cat !== 'trilha' || txt(x.trilha) === trilha)) maior = Math.max(maior, num(x.ordem, 0));
+    });
+    return maior + 1;
+  }
+  // O formato do número aparece para o Administrador como opção simples; por dentro é um código
+  function formatoDe(t) {
+    var f = txt(t.formato_ref);
+    if (!f) return { tipo: 'livre', min: '', max: '' };
+    var m = f.match(/^\^\[0-9\]\{(\d+),(\d+)\}\$$/);
+    return m ? { tipo: 'numeros', min: +m[1], max: +m[2] } : { tipo: 'personalizado', min: '', max: '' };
+  }
   function validarFormatoRef(tipo, ref) {
     var f = txt(tipo && tipo.formato_ref);
     if (!f) return;
@@ -1113,6 +1156,8 @@ var Logica = (function () {
       id: txt(q.id), categoria: txt(q.categoria), tipo: txt(q.tipo) || 'multipla', texto: txt(q.texto), alternativas: alternativas(q),
       correta: txt(q.correta), explicacao: txt(q.explicacao), fonte: txt(q.fonte), trilha: txt(q.trilha), ordem: txt(q.ordem),
       status: txt(q.status), autor: autor ? { nome: txt(autor.nome), avatar: avatarDe(autor) } : null,
+      a: txt(q.a), b: txt(q.b), c: txt(q.c), d: txt(q.d),
+      abre_iso: isoData(lerData(q.abre_em, ctx.fuso), ctx.fuso), fecha_iso: isoData(lerData(q.fecha_em, ctx.fuso), ctx.fuso),
       abre_texto: lerData(q.abre_em, ctx.fuso) ? fmtDiaData(lerData(q.abre_em, ctx.fuso), ctx.fuso) : '',
       fecha_texto: lerData(q.fecha_em, ctx.fuso) ? fmtDiaData(lerData(q.fecha_em, ctx.fuso), ctx.fuso) : ''
     };
@@ -1174,7 +1219,8 @@ var Logica = (function () {
 
     perguntasLider: function (ctx) {
       var todas = ctx.t('Perguntas');
-      function por(status) { return todas.filter(function (q) { return txt(q.status) === status; }).map(function (q) { return perguntaCompleta(ctx, q); }); }
+      function comContagem(q) { var x = perguntaCompleta(ctx, q); x.respostas = respostasDaPergunta(ctx, txt(q.id)); return x; }
+      function por(status) { return todas.filter(function (q) { return txt(q.status) === status; }).map(comContagem); }
       var ativas = todas.filter(function (q) { return txt(q.status) === 'ativa'; });
       var cont = {};
       ativas.forEach(function (q) { var c = txt(q.categoria) || 'sem categoria'; cont[c] = (cont[c] || 0) + 1; });
@@ -1182,7 +1228,7 @@ var Logica = (function () {
       ativas.forEach(function (q) { var n = txt(q.trilha); if (txt(q.categoria) === 'trilha' && n && trilhas.indexOf(n) < 0) trilhas.push(n); });
       return {
         ok: true, sugestoes: por('sugestao'), rascunhos: por('rascunho'), revisar: por('revisar'),
-        ativas: ativas.map(function (q) { return perguntaCompleta(ctx, q); }),
+        ativas: ativas.map(comContagem),
         contagem: cont, trilhas: trilhas, total_ativas: ativas.length, pontos_sugestao: num(ctx.cfg.pontos_sugestao, 5)
       };
     },
@@ -1201,11 +1247,7 @@ var Logica = (function () {
         if (cat === 'trilha' && !txt(patch.trilha !== undefined ? patch.trilha : q.trilha)) throw erro('Informe o nome da trilha.');
         if (req.abre_em) patch.abre_em = lerData(req.abre_em, ctx.fuso);
         if (req.fecha_em) patch.fecha_em = lerData(req.fecha_em, ctx.fuso);
-        if (cat === 'trilha' && !txt(q.ordem)) {
-          var maior = 0;
-          ctx.t('Perguntas').forEach(function (x) { if (txt(x.categoria) === 'trilha' && txt(x.trilha) === txt(patch.trilha || q.trilha)) maior = Math.max(maior, num(x.ordem, 0)); });
-          patch.ordem = maior + 1;
-        }
+        if ((cat === 'trilha' || cat === 'aovivo') && !txt(q.ordem)) patch.ordem = proximaOrdem(ctx, cat, txt(patch.trilha || q.trilha));
         var bonus = decisao === 'aprovar' && txt(q.status) === 'sugestao' && txt(q.autor_id);
         ctx.upd('Perguntas', 'id', txt(q.id), patch);
         if (bonus) darBonus(ctx, txt(q.autor_id), 'pergunta_aprovada', num(ctx.cfg.pontos_sugestao, 5), lider);
@@ -1292,11 +1334,13 @@ var Logica = (function () {
       return { ok: true, bonus_dado: bonusDado, meta: metaColetiva(ctx) };
     },
 
-    configLider: function (ctx) {
-      var valores = {};
-      EDITAVEIS.forEach(function (e) { valores[e.chave] = ctx.cfg[e.chave]; });
+    configLider: function (ctx, req, lider) {
+      var valores = {}, admin = ehAdmin(lider);
+      var campos = EDITAVEIS.filter(function (e) { return admin || !e.admin; });
+      campos.forEach(function (e) { valores[e.chave] = ctx.cfg[e.chave]; });
       return {
-        ok: true, campos: EDITAVEIS, valores: valores, meta_coletiva: metaColetiva(ctx),
+        ok: true, admin: admin, campos: campos, valores: valores, meta_coletiva: metaColetiva(ctx),
+        mural: txt(ctx.cfg.mural_texto),
         tipos: ctx.t('TiposEntrega').filter(function (t) { return txt(t.id); }).map(function (t) {
           return { id: txt(t.id), nome: txt(t.nome), pontos: num(t.pontos, 0), referencia: txt(t.referencia) || 'nao', sorteavel: sim(t.sorteavel), selo: txt(t.selo), ativo: sim(t.ativo) };
         }),
@@ -1308,16 +1352,17 @@ var Logica = (function () {
     // ----- Cadastro da equipe pelo app -----
     equipeLider: function (ctx, req, lider) {
       var pessoas = ctx.t('Pessoas').filter(function (p) { return txt(p.id); }).map(function (p) {
-        var x = pessoaPublica(p); x.ativo = sim(p.ativo); x.voce = txt(p.id) === txt(lider.id); x.codigo = normCodigo(p.codigo); x.bloqueado = lerData(p.bloqueado_ate, ctx.fuso) > ctx.agora; return x;
+        var x = pessoaPublica(p); x.ativo = sim(p.ativo); x.voce = txt(p.id) === txt(lider.id); x.admin = ehAdmin(p); x.codigo = normCodigo(p.codigo); x.bloqueado = lerData(p.bloqueado_ate, ctx.fuso) > ctx.agora; return x;
       }).sort(function (a, b) { return (b.ativo - a.ativo) || (b.papel === 'lider') - (a.papel === 'lider') || a.nome.localeCompare(b.nome, 'pt-BR'); });
-      return { ok: true, pessoas: pessoas, turnos: turnosCadastrados(ctx) };
+      return { ok: true, pessoas: pessoas, turnos: turnosCadastrados(ctx), eu_admin: ehAdmin(lider) };
     },
 
     salvarPessoa: function (ctx, req, lider) {
       var nome = txt(req.nome).replace(/\s+/g, ' ');
       if (nome.length < 2) throw erro('Escreva o nome da pessoa.');
       if (nome.length > 40) throw erro('Use um nome com até 40 letras.');
-      var papel = txt(req.papel) === 'lider' ? 'lider' : 'equipe';
+      var papel = txt(req.papel) === 'admin' ? 'admin' : (txt(req.papel) === 'lider' ? 'lider' : 'equipe');
+      if (papel === 'admin' && !ehAdmin(lider)) throw erro('Só o Administrador pode dar esse papel.');
       var turnos = turnosCadastrados(ctx);
       var turno = txt(req.turno);
       if (turnos.length && turnos.indexOf(turno) < 0) throw erro('Escolha um dos turnos cadastrados: ' + turnos.join(', ') + '.');
@@ -1332,9 +1377,11 @@ var Logica = (function () {
       }
       var p = pessoaPorId(ctx, id);
       if (!p) throw erro('Pessoa não encontrada.');
+      if (ehAdmin(p) && !ehAdmin(lider)) throw erro('Só o Administrador pode alterar esse cadastro.');
       var ativo = req.ativo === undefined ? sim(p.ativo) : sim(req.ativo);
       if (id === txt(lider.id) && !ativo) throw erro('Você não pode desativar o seu próprio cadastro.');
-      if (id === txt(lider.id) && papel !== 'lider') throw erro('Você não pode tirar o seu próprio papel de líder. Peça a outro líder.');
+      if (id === txt(lider.id) && papel === 'equipe') throw erro('Você não pode tirar o seu próprio papel de líder. Peça a outro líder.');
+      if (id === txt(lider.id)) papel = txt(lider.papel).toLowerCase();
       ctx.upd('Pessoas', 'id', id, { nome: nome, turno: turno, papel: papel, ativo: ativo ? 'sim' : 'nao' });
       return { ok: true, novo: false, id: id, nome: nome };
     },
@@ -1342,6 +1389,7 @@ var Logica = (function () {
     novoPin: function (ctx, req, lider) {
       var p = pessoaPorId(ctx, req.id);
       if (!p) throw erro('Pessoa não encontrada.');
+      if (ehAdmin(p) && !ehAdmin(lider)) throw erro('Só o Administrador pode gerar um PIN novo para esse cadastro.');
       var pin = gerarPin(ctx, txt(p.id));
       // Gerar PIN novo também destrava a pessoa e dá código a quem foi cadastrado à mão na planilha
       var codigo = normCodigo(p.codigo) || sortearCodigo(codigosUsados(ctx.t('Pessoas')));
@@ -1349,16 +1397,174 @@ var Logica = (function () {
       return { ok: true, id: txt(p.id), nome: txt(p.nome), pin: pin, codigo: codigo, proprio: txt(p.id) === txt(lider.id) };
     },
 
-    salvarConfig: function (ctx, req) {
+    // ----- Janelas por turno -----
+    janelasLider: function (ctx) {
+      return {
+        ok: true,
+        turnos: ctx.t('Turnos').filter(function (t) { return txt(t.turno); }).map(function (t) {
+          return {
+            turno: txt(t.turno),
+            faixas: faixasDoTurno(ctx, t.turno).map(function (f) { return { ini: fmtMin(f.ini), fim: fmtMin(f.fim) }; }),
+            pessoas: pessoasAtivas(ctx).filter(function (p) { return txt(p.turno) === txt(t.turno); }).length
+          };
+        })
+      };
+    },
+
+    salvarTurno: function (ctx, req) {
+      var nome = txt(req.turno).replace(/\s+/g, ' '), antigo = txt(req.antigo);
+      if (!nome || nome.length > 20) throw erro('Dê um nome de até 20 letras ao turno.');
+      var turnos = ctx.t('Turnos').filter(function (t) { return txt(t.turno); });
+      if (antigo && !turnos.some(function (t) { return txt(t.turno) === antigo; })) throw erro('Turno não encontrado.');
+      if (nome !== antigo && turnos.some(function (t) { return txt(t.turno) === nome; })) throw erro('Já existe um turno com esse nome.');
+      var faixas = (req.faixas || []).filter(function (f) { return txt(f.ini) || txt(f.fim); });
+      if (!faixas.length) throw erro('Informe ao menos uma janela, com início e fim.');
+      if (faixas.length > 4) throw erro('Use no máximo 4 janelas por turno.');
+      var janelas = faixas.map(function (f) {
+        var i = hhmm(f.ini), j = hhmm(f.fim);
+        if (i < 0 || j < 0 || i >= 1440 || j >= 1440) throw erro('Horário inválido. Use o formato 07:00.');
+        if (i === j) throw erro('O início e o fim da janela não podem ser iguais.');
+        return fmtMin(i) + '-' + fmtMin(j);
+      }).join('; ');
+      if (!antigo) { ctx.ins('Turnos', { turno: nome, janelas: janelas }); return { ok: true }; }
+      ctx.upd('Turnos', 'turno', antigo, { turno: nome, janelas: janelas });
+      if (nome !== antigo) {
+        ctx.t('Pessoas').filter(function (p) { return txt(p.turno) === antigo; }).forEach(function (p) { ctx.upd('Pessoas', 'id', txt(p.id), { turno: nome }); });
+      }
+      return { ok: true };
+    },
+
+    removerTurno: function (ctx, req) {
+      var turno = txt(req.turno);
+      var turnos = ctx.t('Turnos').filter(function (t) { return txt(t.turno); });
+      if (!turnos.some(function (t) { return txt(t.turno) === turno; })) throw erro('Turno não encontrado.');
+      if (turnos.length === 1) throw erro('A equipe precisa de ao menos um turno.');
+      if (pessoasAtivas(ctx).some(function (p) { return txt(p.turno) === turno; })) throw erro('Ainda há pessoas neste turno. Troque o turno delas antes de remover.');
+      ctx.upd('Turnos', 'turno', turno, { turno: '', janelas: '' });
+      return { ok: true };
+    },
+
+    // ----- Entregas, pontos e selos -----
+    entregasLider: function (ctx, req, lider) {
+      var selos = [];
+      var entregas = ctx.t('TiposEntrega').filter(function (t) { return txt(t.id); }).map(function (t) {
+        if (txt(t.selo) && selos.indexOf(txt(t.selo)) < 0) selos.push(txt(t.selo));
+        return {
+          id: txt(t.id), nome: txt(t.nome), categoria: txt(t.categoria), pontos: num(t.pontos, 0), referencia: txt(t.referencia).toLowerCase() || 'nao',
+          dica_ref: txt(t.dica_ref), ref_unica: sim(t.ref_unica), sorteavel: sim(t.sorteavel), max_por_dia: num(t.max_por_dia, 0), selo: txt(t.selo), ativo: sim(t.ativo), formato: formatoDe(t)
+        };
+      }).sort(function (a, b) { return (b.ativo - a.ativo) || a.nome.localeCompare(b.nome, 'pt-BR'); });
+      return { ok: true, admin: ehAdmin(lider), selos: selos, entregas: entregas };
+    },
+
+    salvarEntrega: function (ctx, req, lider) {
+      var nome = txt(req.nome).replace(/\s+/g, ' ');
+      if (nome.length < 3 || nome.length > 60) throw erro('Dê à entrega um nome de 3 a 60 letras.');
+      var id = txt(req.id), atual = id ? tipoPorId(ctx, id) : null;
+      if (id && !atual) throw erro('Entrega não encontrada.');
+      if (ctx.t('TiposEntrega').some(function (t) { return txt(t.id) && txt(t.id) !== id && normalizar(t.nome) === normalizar(nome); })) throw erro('Já existe uma entrega com esse nome.');
+      var pontos = num(req.pontos, -1);
+      if (pontos < 0 || pontos > 1000 || pontos !== Math.floor(pontos)) throw erro('Os pontos vão de 0 a 1000, sem casas decimais.');
+      var referencia = txt(req.referencia);
+      if (['nao', 'opcional', 'obrigatoria'].indexOf(referencia) < 0) throw erro('Escolha se a entrega pede número de referência.');
+      var max = num(req.max_por_dia, 0);
+      if (max < 0 || max > 20 || max !== Math.floor(max)) throw erro('O máximo por dia vai de 0 (sem limite) a 20.');
+      var patch = {
+        nome: nome, categoria: txt(req.categoria) || 'Geral', pontos: pontos, referencia: referencia, dica_ref: referencia === 'nao' ? '' : txt(req.dica_ref),
+        ref_unica: referencia !== 'nao' && sim(req.ref_unica) ? 'sim' : 'nao', sorteavel: referencia !== 'nao' && sim(req.sorteavel) ? 'sim' : 'nao',
+        max_por_dia: max, selo: txt(req.selo), ativo: sim(req.ativo) ? 'sim' : 'nao'
+      };
+      if (ehAdmin(lider) && req.formato && req.formato.tipo !== 'personalizado') {
+        if (req.formato.tipo === 'numeros') {
+          var min = num(req.formato.min, 0), maxD = num(req.formato.max, 0);
+          if (min < 1 || maxD > 20 || min > maxD || min !== Math.floor(min) || maxD !== Math.floor(maxD)) throw erro('Informe a quantidade de dígitos, de 1 a 20.');
+          patch.formato_ref = '^[0-9]{' + min + ',' + maxD + '}$';
+        } else {
+          patch.formato_ref = '';
+        }
+      }
+      if (atual) { ctx.upd('TiposEntrega', 'id', id, patch); return { ok: true, id: id }; }
+      var base = normalizar(nome).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'entrega';
+      var novoIdTipo = base, n = 2;
+      while (tipoPorId(ctx, novoIdTipo) || TIPOS_ESPECIAIS[novoIdTipo]) novoIdTipo = base + '_' + n++;
+      if (patch.formato_ref === undefined) patch.formato_ref = '';
+      ctx.ins('TiposEntrega', Object.assign({ id: novoIdTipo }, patch));
+      return { ok: true, id: novoIdTipo };
+    },
+
+    // ----- Perguntas escritas pelo líder -----
+    salvarPergunta: function (ctx, req) {
+      var id = txt(req.id), q = id ? perguntaPorId(ctx, id) : null;
+      if (id && (!q || txt(q.status) === 'excluida')) throw erro('Pergunta não encontrada.');
+      if (q && respostasDaPergunta(ctx, id)) throw erro('Essa pergunta já tem respostas e não pode mais ser editada. Se precisar, exclua e crie outra.');
+      var cat = txt(req.categoria);
+      if (['semana', 'trilha', 'desafio', 'secreta', 'aovivo'].indexOf(cat) < 0) throw erro('Escolha onde a pergunta vai entrar.');
+      var texto = txt(req.texto);
+      if (texto.length < 10 || texto.length > 500) throw erro('Escreva a pergunta com 10 a 500 letras.');
+      var tipo = cat === 'desafio' ? 'palavra' : 'multipla';
+      var correta = txt(req.correta);
+      var patch = { categoria: cat, tipo: tipo, texto: texto, explicacao: txt(req.explicacao), fonte: txt(req.fonte), a: '', b: '', c: '', d: '' };
+      if (tipo === 'palavra') {
+        if (!correta) throw erro('Informe a palavra secreta.');
+      } else {
+        ['a', 'b', 'c', 'd'].forEach(function (l) { patch[l] = txt(req[l]); });
+        if (!patch.a || !patch.b) throw erro('Preencha ao menos as alternativas A e B.');
+        correta = correta.toUpperCase();
+        if (!/^[ABCD]$/.test(correta) || !patch[correta.toLowerCase()]) throw erro('Marque qual alternativa é a certa.');
+      }
+      patch.correta = correta;
+      patch.trilha = cat === 'trilha' ? txt(req.trilha) : '';
+      if (cat === 'trilha' && !patch.trilha) throw erro('Informe o nome da trilha.');
+      if (cat === 'trilha' || cat === 'aovivo') {
+        var ordem = num(req.ordem, 0);
+        patch.ordem = ordem > 0 ? Math.floor(ordem) : (q && txt(q.categoria) === cat && num(q.ordem, 0) > 0 ? num(q.ordem, 0) : proximaOrdem(ctx, cat, patch.trilha));
+      } else {
+        patch.ordem = '';
+      }
+      if (cat === 'semana') {
+        var abre = lerData(req.abre_em, ctx.fuso), fecha = lerData(req.fecha_em, ctx.fuso);
+        if (!abre || !fecha) throw erro('Informe as datas de abertura e de fechamento da pergunta da semana.');
+        if (fecha < abre) throw erro('A data de fechamento não pode ser antes da abertura.');
+        patch.abre_em = abre;
+        patch.fecha_em = fecha + DIA - 1;
+      }
+      if (q) { ctx.upd('Perguntas', 'id', id, patch); return { ok: true, id: id }; }
+      var novaId = novoId('p', ctx.agora);
+      ctx.ins('Perguntas', Object.assign({ id: novaId, abre_em: '', fecha_em: '', pontos: cat === 'desafio' ? 3 : (cat === 'aovivo' ? 2 : 5), status: 'rascunho', autor_id: '', criado_em: ctx.agora }, patch));
+      return { ok: true, id: novaId };
+    },
+
+    // Excluir só tira do app: a linha fica na planilha, para o histórico e as respostas continuarem íntegros
+    excluirPergunta: function (ctx, req) {
+      var id = txt(req.id), q = perguntaPorId(ctx, id);
+      if (!q || txt(q.status) === 'excluida') throw erro('Pergunta não encontrada.');
+      if (txt(ctx.cfg.aovivo_sessao) && txt(ctx.cfg.aovivo_pergunta) === id) throw erro('Essa pergunta está no ar no quiz ao vivo. Encerre o quiz antes de excluir.');
+      ctx.upd('Perguntas', 'id', id, { status: 'excluida' });
+      return { ok: true };
+    },
+
+    // ----- Mural de avisos -----
+    salvarMural: function (ctx, req) {
+      var texto = txt(req.texto);
+      if (texto.length > 300) throw erro('Use um aviso de até 300 letras.');
+      gravarConfig(ctx, 'mural_texto', texto);
+      gravarConfig(ctx, 'mural_em', texto ? ctx.agora : '');
+      return { ok: true };
+    },
+
+    salvarConfig: function (ctx, req, lider) {
       var v = req.valores || {};
       EDITAVEIS.forEach(function (e) {
         if (v[e.chave] === undefined) return;
+        if (e.admin && !ehAdmin(lider)) throw erro('Só o Administrador pode alterar "' + e.rotulo + '".');
         var valor = v[e.chave];
+        if (e.tipo === 'data') { valor = txt(valor); if (valor && !/^\d{4}-\d{2}-\d{2}$/.test(valor)) throw erro('Data inválida em "' + e.rotulo + '".'); }
         if (e.tipo === 'numero' || e.tipo === 'dia') { valor = num(valor, null); if (valor === null) throw erro('Valor inválido em "' + e.rotulo + '".'); }
         if (e.tipo === 'simnao') valor = sim(valor) ? 'sim' : 'nao';
         if (e.tipo === 'hora' && hhmm(valor) < 0) throw erro('Hora inválida em "' + e.rotulo + '". Use 09:00.');
         if (e.chave === 'nivel_total' && (valor < 3 || valor > 10)) throw erro('A quantidade de níveis vai de 3 a 10.');
         if (e.chave === 'nome_app' && !txt(valor)) throw erro('O nome do app não pode ficar vazio.');
+        if (e.chave === 'marcar_ate_dias' && (valor < 0 || valor > 14)) throw erro('O prazo para marcar vai de 0 a 14 dias.');
         if (e.chave === 'pin_max_erros' && (valor < 3 || valor > 20)) throw erro('Os erros de PIN até travar vão de 3 a 20.');
         if (e.chave === 'pin_bloqueio_min' && (valor < 1 || valor > 1440)) throw erro('O tempo travado vai de 1 a 1440 minutos.');
         gravarConfig(ctx, e.chave, valor);
@@ -1430,7 +1636,7 @@ var Logica = (function () {
   };
 
   // Ações que só leem dados (não precisam de trava na planilha)
-  var SOMENTE_LEITURA = { inicio: 1, entrar: 1, painel: 1, tipos: 1, quiz: 1, pergunta: 1, ranking: 1, perfil: 1, aoVivoEstado: 1, pendentes: 1, perguntasLider: 1, previaApuracao: 1, configLider: 1, aoVivoPainel: 1, equipeLider: 1 };
+  var SOMENTE_LEITURA = { inicio: 1, entrar: 1, painel: 1, tipos: 1, quiz: 1, pergunta: 1, ranking: 1, perfil: 1, aoVivoEstado: 1, pendentes: 1, perguntasLider: 1, previaApuracao: 1, configLider: 1, aoVivoPainel: 1, equipeLider: 1, janelasLider: 1, entregasLider: 1 };
 
   // ---------------------------------------------------------------------------
   // Ponto de entrada
@@ -1500,7 +1706,7 @@ var Logica = (function () {
     if (!demo) {
       cfg('meta_coletiva_atual', '0');
       dados.Pessoas = [
-        { id: 'lider', nome: 'Diego (líder)', turno: 'A', papel: 'lider', pin: '1234', avatar: 'locomotiva', ativo: 'sim' },
+        { id: 'lider', nome: 'Diego (administrador)', turno: 'A', papel: 'admin', pin: '1234', avatar: 'locomotiva', ativo: 'sim' },
         { id: 'pessoa1', nome: 'Pessoa de exemplo', turno: 'A', papel: 'equipe', pin: '0000', avatar: 'rodeiro', ativo: 'sim' }
       ];
       garantirCodigos(criarDbMemoria(dados));
@@ -1522,7 +1728,10 @@ var Logica = (function () {
       ['lucas', 'Lucas Ferreira', 'A', '9999', 'capacete', 0.74],
       ['sergio', 'Sérgio Nunes', 'B', '1010', 'engrenagem', 0.7]
     ];
-    dados.Pessoas.push({ id: 'diego', nome: 'Diego (líder)', turno: 'A', papel: 'lider', pin: '1234', avatar: 'locomotiva', ativo: 'sim' });
+    // Próxima sexta, para o aviso do Pit Stop aparecer na demonstração
+    for (var dd = 1; dd <= 7; dd++) { if (partes(agora + dd * DIA, fuso).sem === 5) { cfg('apuracao_data', isoData(agora + dd * DIA, fuso)); break; } }
+    dados.Pessoas.push({ id: 'diego', nome: 'Diego (administrador)', turno: 'A', papel: 'admin', pin: '1234', avatar: 'locomotiva', ativo: 'sim' });
+    dados.Pessoas.push({ id: 'supervisor', nome: 'Supervisor (líder)', turno: 'A', papel: 'lider', pin: '2468', avatar: 'capacete', ativo: 'sim' });
     equipe.forEach(function (e) { dados.Pessoas.push({ id: e[0], nome: e[1], turno: e[2], papel: 'equipe', pin: e[3], avatar: e[4], ativo: 'sim' }); });
     garantirCodigos(criarDbMemoria(dados));
 

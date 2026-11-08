@@ -1,9 +1,9 @@
 /* Pro10 — guarda os arquivos do site no celular para abrir rápido.
  * Ao publicar uma versão nova, aumente o número em VERSAO. */
-var VERSAO = 'pro10-v8';
+var VERSAO = 'pro10-v9';
 var ARQUIVOS = [
-  './', 'index.html', 'manifest.webmanifest', 'estilo.css?v=8',
-  'config.js?v=8', 'logica.js?v=8', 'icones.js?v=8', 'api.js?v=8', 'app.js?v=8',
+  './', 'index.html', 'manifest.webmanifest', 'estilo.css?v=9',
+  'config.js?v=9', 'logica.js?v=9', 'icones.js?v=9', 'api.js?v=9', 'app.js?v=9',
   'icone.svg', 'icone-192.png', 'icone-512.png'
 ];
 

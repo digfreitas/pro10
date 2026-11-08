@@ -223,7 +223,8 @@
     'entrar': telaEntrar, 'inicio': telaInicio, 'marcar': telaMarcar, 'quiz': telaQuiz, 'pergunta': telaPergunta,
     'sugerir': telaSugerir, 'ranking': telaRanking, 'perfil': telaPerfil, 'avatar': telaAvatar, 'aovivo': telaAoVivo,
     'lider/validar': telaValidar, 'lider/perguntas': telaPerguntasLider, 'lider/importar': telaImportar,
-    'lider/apuracao': telaApuracao, 'lider/aovivo': telaAoVivoTV, 'lider/config': telaConfig, 'lider/equipe': telaEquipe
+    'lider/apuracao': telaApuracao, 'lider/aovivo': telaAoVivoTV, 'lider/config': telaConfig, 'lider/equipe': telaEquipe,
+    'lider/janelas': telaJanelas, 'lider/entregas': telaEntregas, 'lider/pergunta': telaEditarPergunta
   };
 
   function limpar() {
@@ -304,12 +305,12 @@
         } else if (!sel) {
           corpo = '<h2 class="h2">Quem é você?</h2>' + (pessoas.length ? '<div class="lista-pessoas">' + pessoas.map(function (p) {
             return '<button type="button" class="pessoa" data-acao="escolher" data-id="' + esc(p.id) + '">' + A(p.avatar, 48) + '<span class="pessoa-nome">' + esc(p.nome) + '</span>' +
-              (p.papel === 'lider' ? '<span class="chip chip-escuro">Líder</span>' : '<span class="pessoa-turno">Turno ' + esc(p.turno || '–') + '</span>') +
+              (p.papel !== 'equipe' ? '<span class="chip chip-escuro">' + (p.papel === 'admin' ? 'Administrador' : 'Líder') + '</span>' : '<span class="pessoa-turno">Turno ' + esc(p.turno || '–') + '</span>') +
               '<span class="pessoa-dica">PIN ' + esc(p.pin) + '</span></button>';
           }).join('') + '</div>' : vazio('Ninguém cadastrado ainda', 'Peça ao líder para cadastrar a equipe na aba Pessoas da planilha.'));
         } else {
           corpo = '<form class="cartao" data-form="pin" novalidate style="align-items:center;text-align:center;gap:14px;padding:24px 16px">' + A(sel.avatar, 72) +
-            '<div><p class="h2">' + esc(sel.nome) + '</p><p class="muted">' + (sel.papel === 'lider' ? 'Líder' : 'Turno ' + esc(sel.turno)) + '</p></div>' +
+            '<div><p class="h2">' + esc(sel.nome) + '</p><p class="muted">' + (sel.papel !== 'equipe' ? (sel.papel === 'admin' ? 'Administrador' : 'Líder') : 'Turno ' + esc(sel.turno)) + '</p></div>' +
             '<div class="campo" style="width:100%"><label for="pin">Seu PIN</label><input id="pin" name="pin" class="entrada entrada-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8">' +
             (erroPin ? '<span class="erro-campo" role="alert">' + esc(erroPin) + '</span>' : '') + '</div>' +
             '<button class="botao botao-grande" type="submit">Entrar</button><button class="link-botao" type="button" data-acao="trocar">Não é você? Escolher outra pessoa</button></form>' +
@@ -356,7 +357,7 @@
         '<div class="saudacao">' + A(r.pessoa.avatar, 52, true) + '<div><h1 class="titulo">' + saudacao() + ', ' + esc(primeiroNome(r.pessoa.nome)) + '</h1>' + linhaJanela + '</div></div>' +
         '<div class="cartao-vidro"><div class="grid3">' + stat('Pontos no mês', r.pontos_mes) + stat(m.apuracao ? 'Desde o Pit Stop' : 'No período', r.pontos_periodo) + stat('Dias ativos', r.dias_ativos) + '</div>' +
         acelerador(r.nivel, true) +
-        (m.apuracao ? '<div class="painel-rodape">' + I('trofeu', 18, '#FDBA74') + '<span>Sua posição sai no Pit Stop de ' + esc(r.proxima_apuracao.dia_nome) + ', ' + esc(hora) + '</span></div>' : '') +
+        (m.apuracao ? '<div class="painel-rodape">' + I('trofeu', 18, '#FDBA74') + '<span>' + (r.proxima_apuracao.definida ? 'Sua posição sai no Pit Stop de ' + esc(r.proxima_apuracao.dia_nome) + ', ' + esc(hora) : 'Próximo Pit Stop a definir') + '</span></div>' : '') +
         '</div></header>';
 
       var blocos = [];
@@ -365,6 +366,7 @@
           '<div style="display:flex;gap:8px"><label class="visualmente-oculto" for="ref-' + esc(a.id) + '">Número de referência</label><input id="ref-' + esc(a.id) + '" name="ref" class="entrada" autocomplete="off" placeholder="Número de referência"><button class="botao botao-azul botao-inline" type="submit">Enviar</button></div></form>');
       });
       if (r.aovivo_ativo) blocos.push(cartaoAoVivo());
+      if (r.mural) blocos.push('<div class="cartao-laranja mural"><div style="display:flex;gap:10px">' + I('alerta', 22, '#9A3412') + '<div class="texto-flex"><span class="rotulo laranja">Aviso do líder' + (r.mural.data ? ' · ' + esc(r.mural.data) : '') + '</span><span style="font-size:15px;white-space:pre-line">' + esc(r.mural.texto) + '</span></div></div></div>');
       blocos.push(j.aberta ? '<a class="botao botao-grande" href="#/marcar">' + I('marcar', 22) + 'Marcar entrega</a>'
         : '<a class="botao botao-grande botao-leve" href="#/marcar">' + I('cadeado', 20) + 'Registro abre ' + esc(j.proxima_texto) + '</a>');
       if (r.pergunta_semana) {
@@ -436,12 +438,12 @@
         render(paginaEquipe('marcar', '<header class="cab-claro"><h1 class="titulo">Marcar entrega</h1><p class="sub">Fora do horário de registro</p></header><main class="conteudo">' +
           '<div class="resultado"><span class="circulo" style="background:var(--cinza-suave);color:var(--navy-2)">' + I('cadeado', 34) + '</span><h2>Registro fechado agora</h2><p>Por segurança, o app só aceita registros no início e no fim do turno, em local seguro.</p>' +
           '<div class="cartao-escuro" style="width:100%;flex-direction:row;align-items:center;justify-content:space-between;text-align:left"><div class="texto-flex"><span class="rotulo pessego">Próxima janela</span><span style="font-size:17px;font-weight:700">' + esc(r.janela.proxima_texto) + '</span></div><span class="chip chip-claro num" style="font-size:16px">em ' + esc(r.janela.falta_texto) + '</span></div></div>' +
-          '<div class="lista"><div class="item">' + '<span class="icone-q azul">' + I('relogio', 20) + '</span><div class="texto-flex"><span class="nome">Esqueceu de marcar algo?</span><span class="muted">Você pode registrar até 24h depois, na próxima janela.</span></div></div>' +
+          '<div class="lista"><div class="item">' + '<span class="icone-q azul">' + I('relogio', 20) + '</span><div class="texto-flex"><span class="nome">Esqueceu de marcar algo?</span><span class="muted">' + (r.dias.length > 1 ? 'Você pode registrar até ' + (r.dias.length - 1) + (r.dias.length === 2 ? ' dia' : ' dias') + ' depois, na próxima janela.' : 'Só dá para registrar no mesmo dia.') + '</span></div></div>' +
           '<div class="item"><span class="icone-q">' + I('quiz', 20) + '</span><div class="texto-flex"><span class="nome">O quiz também abre só na janela</span><span class="muted">Ler o manual pode ser a qualquer hora. Responder, só no horário do turno.</span></div></div></div>' +
           '<a class="botao botao-contorno" href="#/perfil">Ver meus pontos</a></main>'));
         return;
       }
-      var f = { tipo: null, quando: 'hoje', ref: '', erro: '' };
+      var f = { tipo: null, atras: 0, ref: '', erro: '' };
       function tipoSel() { return r.tipos.filter(function (t) { return t.id === f.tipo; })[0]; }
       function desenhar(rolar) {
         var t = tipoSel();
@@ -450,7 +452,7 @@
           return '<button type="button" class="tipo" data-acao="tipo" data-id="' + esc(x.id) + '" aria-pressed="' + s + '"><span class="tipo-pts">+' + x.pontos + '</span><span class="texto-flex"><span class="nome">' + esc(x.nome) + '</span><span class="muted">' + esc(x.categoria) +
             (x.referencia === 'obrigatoria' ? ' · pede nº de referência' : '') + '</span></span><span class="marca">' + (s ? I('check', 14, '#fff', 3) : '') + '</span></button>';
         }).join('') + '</div>';
-        if (!r.tipos.length) lista = vazio('Nenhuma entrega cadastrada', 'O líder cadastra as entregas na aba TiposEntrega da planilha.');
+        if (!r.tipos.length) lista = vazio('Nenhuma entrega cadastrada', 'O líder cadastra as entregas em Ajustes.');
         var det = '';
         if (t) {
           det = '<div class="detalhe-tipo">';
@@ -458,7 +460,7 @@
             det += '<div class="campo"><label for="ref">Número de referência' + (t.referencia === 'opcional' ? ' <span class="muted">(opcional)</span>' : '') + '</label><input id="ref" name="ref" class="entrada" autocomplete="off" value="' + esc(f.ref) + '" placeholder="' + esc(t.dica_ref || 'Ex.: nº da RAF') + '">' +
               '<span class="muted">' + (t.dica_ref ? 'Informe o ' + esc(t.dica_ref) + '. ' : '') + 'O líder pode conferir no sistema oficial.</span></div>';
           }
-          if (r.pode_ontem) det += '<div class="campo"><span class="lbl">Quando foi feita</span><div class="opcoes"><button type="button" class="opcao" data-acao="quando" data-v="hoje" aria-pressed="' + (f.quando === 'hoje') + '">Hoje</button><button type="button" class="opcao" data-acao="quando" data-v="ontem" aria-pressed="' + (f.quando === 'ontem') + '">Ontem</button></div></div>';
+          if (r.dias.length > 1) det += '<div class="campo"><label for="dia">Quando foi feita</label><select id="dia" name="dia" class="entrada">' + r.dias.map(function (d) { return '<option value="' + d.atras + '"' + (d.atras === f.atras ? ' selected' : '') + '>' + esc(d.texto) + '</option>'; }).join('') + '</select></div>';
           det += '<p class="muted">Se passar do prazo da entrega, ela vale ' + r.atraso_pct + '% dos pontos.</p>';
           if (f.erro) det += '<p class="erro-campo" role="alert">' + esc(f.erro) + '</p>';
           det += '</div>';
@@ -466,11 +468,11 @@
         var rodape = '<div class="rodape-fixo">' + (t ? '<button type="button" class="botao botao-grande" data-acao="enviar">Marcar como feita (+' + t.pontos + ' pts)</button>' : '<button type="button" class="botao botao-grande" disabled aria-disabled="true">Escolha uma entrega</button>') + '</div>';
         render(paginaEquipe('marcar', cabMarcar(r.janela) + '<main class="conteudo">' + lista + det + '</main>' + rodape), {
           tipo: function (b) { f.tipo = b.getAttribute('data-id'); f.erro = ''; desenhar(true); },
-          quando: function (b) { f.quando = b.getAttribute('data-v'); desenhar(); },
+          'input:dia': function (i) { f.atras = Number(i.value) || 0; },
           'input:ref': function (i) { f.ref = i.value; },
           enviar: function (b) {
             ocupado(b, true);
-            chamar('marcar', { tipo_id: f.tipo, quando: f.quando, referencia: f.ref }).then(function (x) { window.scrollTo(0, 0); resultadoMarcar(x, tipoSel(), r.janela); })
+            chamar('marcar', { tipo_id: f.tipo, dias_atras: f.atras, referencia: f.ref }).then(function (x) { window.scrollTo(0, 0); resultadoMarcar(x, tipoSel(), r.janela); })
               .catch(function (e) { if (sessaoInvalida(e)) return; f.erro = e.message; desenhar(true); });
           }
         });
@@ -786,13 +788,13 @@
         var minha = fonte ? fonte['minha_' + aba] : null;
         var sub = r.apuracao_ativa ? (r.ultima ? 'Resultado do Pit Stop de ' + r.ultima.data_texto : 'Ainda sem Pit Stop') : 'Atualizado agora';
         var cab = '<header class="cab-escuro" style="padding-bottom:0"><div class="secao-cab" style="align-items:flex-end"><div><h1 class="titulo">Placar da Oficina</h1><p class="sub-claro">' + esc(sub) + '</p></div>' +
-          '<div class="abas" role="group" aria-label="Período"><button type="button" data-acao="aba" data-v="semana" aria-pressed="' + (aba === 'semana') + '">Semana</button><button type="button" data-acao="aba" data-v="mes" aria-pressed="' + (aba === 'mes') + '">Mês</button></div></div>';
+          '<div class="abas" role="group" aria-label="Período"><button type="button" data-acao="aba" data-v="semana" aria-pressed="' + (aba === 'semana') + '">Período</button><button type="button" data-acao="aba" data-v="mes" aria-pressed="' + (aba === 'mes') + '">Mês</button></div></div>';
         if (r.apuracao_ativa) {
-          cab += '<div class="cartao-vidro"><div class="secao-cab" style="align-items:center"><div class="texto-flex"><span class="rotulo pessego">Próximo Pit Stop</span><span style="font-size:17px;font-weight:700">' + esc(r.proxima.texto) + ', na reunião</span><span class="sub-claro" style="font-size:13px">As posições só aparecem no Pit Stop</span></div>' +
-            '<div style="display:flex;flex-direction:column;align-items:center;padding:6px 12px;border-radius:12px;background:rgba(255,255,255,.1)">' + (r.proxima.faltam_dias === 0 ? '<span class="num" style="font-size:22px">hoje</span>' : '<span class="num" style="font-size:34px">' + r.proxima.faltam_dias + '</span><span class="stat-rot">' + (r.proxima.faltam_dias === 1 ? 'dia' : 'dias') + '</span>') + '</div></div>' +
+          cab += '<div class="cartao-vidro"><div class="secao-cab" style="align-items:center"><div class="texto-flex"><span class="rotulo pessego">Próximo Pit Stop</span><span style="font-size:17px;font-weight:700">' + (r.proxima.definida ? esc(r.proxima.texto) + ', na reunião' : 'A definir pelo líder') + '</span><span class="sub-claro" style="font-size:13px">As posições só aparecem no Pit Stop</span></div>' +
+            (r.proxima.definida ? '<div style="display:flex;flex-direction:column;align-items:center;padding:6px 12px;border-radius:12px;background:rgba(255,255,255,.1)">' + (r.proxima.faltam_dias === 0 ? '<span class="num" style="font-size:22px">hoje</span>' : '<span class="num" style="font-size:34px">' + r.proxima.faltam_dias + '</span><span class="stat-rot">' + (r.proxima.faltam_dias === 1 ? 'dia' : 'dias') + '</span>') + '</div>' : '') + '</div>' +
             '<div class="barra-rot" style="padding-top:10px;border-top:1px solid rgba(255,255,255,.14);align-items:baseline"><span>Seus pontos desde o último Pit Stop</span><b class="num" style="font-size:22px;color:#fff">' + r.meus_pontos_periodo + '</b></div></div>';
         }
-        cab += '<span class="rotulo" style="color:var(--claro);margin-top:4px">' + (aba === 'semana' ? 'Semana' : 'Mês até o Pit Stop') + '</span>' + podio(lista) + '</header>';
+        cab += '<span class="rotulo" style="color:var(--claro);margin-top:4px">' + (aba === 'semana' ? 'Desde o Pit Stop anterior' : 'Mês até o Pit Stop') + '</span>' + podio(lista) + '</header>';
         var blocos = [];
         var resto = lista.slice(3);
         if (resto.length) {
@@ -956,6 +958,7 @@
   function telaPerguntasLider() {
     comDados('perguntasLider', {}, function (r) {
       function recarregar() { chamar('perguntasLider').then(function (n) { r = n; desenhar(); }).catch(falhou); }
+      function botaoExcluir(q) { return '<button type="button" class="botao botao-peq botao-leve" data-acao="excluir" data-id="' + esc(q.id) + '" data-n="' + (q.respostas || 0) + '">Excluir</button>'; }
       function blocoPergunta(q, tipo) {
         var alts = q.tipo === 'palavra' ? '<p style="font-size:14px">Palavra secreta: <b>' + esc(q.correta) + '</b></p>'
           : '<div class="pergunta-alts">' + q.alternativas.map(function (a) { return '<span class="' + (a.letra === q.correta ? 'certa' : '') + '">' + a.letra + ') ' + esc(a.texto) + (a.letra === q.correta ? ' ✓' : '') + '</span>'; }).join('') + '</div>';
@@ -964,15 +967,17 @@
         var controles = '<div class="grid2"><div class="campo"><label for="cat-' + esc(q.id) + '">Onde entra</label><select id="cat-' + esc(q.id) + '" class="entrada" data-cat="' + esc(q.id) + '">' +
           CATEGORIAS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cat ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
           '<div class="campo"><label for="tri-' + esc(q.id) + '">Trilha</label><input id="tri-' + esc(q.id) + '" class="entrada" list="lista-trilhas" data-tri="' + esc(q.id) + '" value="' + esc(trilha) + '"></div></div>';
+        var editar = q.respostas ? '' : '<a class="botao botao-peq botao-leve" href="#/lider/pergunta/' + encodeURIComponent(q.id) + '">Editar</a>';
         var botoes = tipo === 'sugestao'
-          ? '<button type="button" class="botao botao-peq botao-leve" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="recusar">Recusar</button><button type="button" class="botao botao-peq botao-verde" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="aprovar">Aprovar (+' + r.pontos_sugestao + ' pts ao autor)</button>'
-          : '<button type="button" class="botao botao-peq botao-leve" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="arquivar">Arquivar</button><button type="button" class="botao botao-peq botao-verde" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="ativar">' + (tipo === 'revisar' ? 'Revisei, reativar' : 'Ativar') + '</button>';
+          ? editar + '<button type="button" class="botao botao-peq botao-leve" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="recusar">Recusar</button><button type="button" class="botao botao-peq botao-verde" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="aprovar">Aprovar (+' + r.pontos_sugestao + ' pts ao autor)</button>'
+          : editar + botaoExcluir(q) + '<button type="button" class="botao botao-peq botao-verde" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="ativar">' + (tipo === 'revisar' ? 'Revisei, reativar' : 'Ativar') + '</button>';
         return '<div class="cartao">' + (q.autor ? '<div style="display:flex;align-items:center;gap:10px">' + A(q.autor.avatar, 36) + '<span class="muted"><b style="color:var(--navy)">' + esc(q.autor.nome) + '</b> · sugestão da equipe</span></div>' : '') +
           '<span class="nome" style="font-size:16px;line-height:1.35">' + esc(q.texto) + '</span>' + alts + '<span class="muted">Fonte: ' + esc(q.fonte || '—') + '</span>' + controles + '<div class="botoes">' + botoes + '</div></div>';
       }
       function desenhar() {
         var cab = cabLider('Perguntas do quiz', r.total_ativas + ' ativas · ' + r.trilhas.length + (r.trilhas.length === 1 ? ' trilha' : ' trilhas'), 'quiz');
-        var b = ['<datalist id="lista-trilhas">' + r.trilhas.concat(['Lições de RAF']).map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>'];
+        var b = ['<datalist id="lista-trilhas">' + r.trilhas.concat(['Lições de RAF']).map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>',
+          '<a class="botao botao-grande" href="#/lider/pergunta">' + I('docmais', 22) + 'Nova pergunta</a>'];
         if (r.revisar.length) {
           b.push('<div class="cartao-laranja"><div style="display:flex;gap:10px">' + I('alerta', 22, '#9A3412') + '<div class="texto-flex"><span class="nome" style="color:var(--laranja-esc)">' + r.revisar.length + ' perguntas fora do ar para revisão</span><span style="font-size:14px">O documento delas mudou de revisão. Confira a resposta e reative.</span></div></div></div>');
           r.revisar.forEach(function (q) { b.push(blocoPergunta(q, 'revisar')); });
@@ -986,7 +991,7 @@
           '<div class="botoes"><button type="button" class="botao botao-peq botao-leve" data-acao="copiarPrompt">' + I('copiar', 18) + 'Copiar instrução</button><a class="botao botao-peq botao-escuro" href="#/lider/importar">Colar perguntas</a></div></div>');
         b.push('<form class="cartao" data-form="doc"><h2 class="h2">Documento mudou de revisão?</h2><p class="muted" style="font-size:14px">Informe o código. As perguntas que citam esse documento saem do ar até você revisar.</p><div style="display:flex;gap:8px"><label class="visualmente-oculto" for="codigo">Código do documento</label><input id="codigo" name="codigo" class="entrada" placeholder="Ex.: PRO-0412"><button class="botao botao-escuro botao-inline" type="submit">Tirar do ar</button></div></form>');
         b.push('<details class="cartao"><summary>Ver as ' + r.total_ativas + ' perguntas ativas</summary>' + (r.ativas.length ? '<div class="lista" style="margin-top:8px">' + r.ativas.map(function (q) {
-          return '<div class="item"><div class="texto-flex"><span style="font-size:14px;font-weight:600">' + esc(q.texto) + '</span><span class="muted">' + esc(nomeCategoria(q.categoria)) + (q.trilha ? ' · ' + esc(q.trilha) : '') + (q.fecha_texto ? ' · até ' + esc(q.fecha_texto) : '') + '</span></div><button type="button" class="botao botao-peq botao-leve" data-acao="moderar" data-id="' + esc(q.id) + '" data-d="arquivar">Arquivar</button></div>';
+          return '<div class="item"><div class="texto-flex"><span style="font-size:14px;font-weight:600">' + esc(q.texto) + '</span><span class="muted">' + esc(nomeCategoria(q.categoria)) + (q.trilha ? ' · ' + esc(q.trilha) : '') + (q.fecha_texto ? ' · até ' + esc(q.fecha_texto) : '') + (q.respostas ? ' · ' + q.respostas + (q.respostas === 1 ? ' resposta' : ' respostas') : '') + '</span></div><div style="display:flex;gap:6px">' + (q.respostas ? '' : '<a class="botao botao-peq botao-leve" href="#/lider/pergunta/' + encodeURIComponent(q.id) + '">Editar</a>') + botaoExcluir(q) + '</div></div>';
         }).join('') + '</div>' : '<p class="muted">Nenhuma pergunta ativa.</p>') + '</details>');
         render(paginaLider('lider/perguntas', cab + '<main class="conteudo">' + b.join('') + '</main>'), {
           moderar: function (bt) {
@@ -998,6 +1003,13 @@
               recarregar();
             }).catch(function (e) { ocupado(bt, false); falhou(e); });
           },
+          excluir: function (bt) {
+            var n = Number(bt.getAttribute('data-n')) || 0;
+            var aviso = n ? (n === 1 ? 'Esta pergunta já tem 1 resposta.' : 'Esta pergunta já tem ' + n + ' respostas.') + ' Ela sai do app para todos, e os pontos já ganhos continuam valendo. Excluir?' : 'Excluir esta pergunta?';
+            if (!window.confirm(aviso)) return;
+            ocupado(bt, true);
+            chamar('excluirPergunta', { id: bt.getAttribute('data-id') }).then(function () { toast('Pergunta excluída.', 'ok'); recarregar(); }).catch(function (e) { ocupado(bt, false); falhou(e); });
+          },
           copiarPrompt: function () { copiar(PROMPT_IA).then(function () { toast('Instrução copiada. Cole no Claude com o texto do documento.', 'ok'); }).catch(function () { location.hash = '#/lider/importar'; }); },
           'form:doc': function (f) {
             chamar('docRevisado', { codigo: f.codigo.value }).then(function (x) { toast(x.afetadas + ' perguntas saíram do ar para revisão.', 'ok'); recarregar(); }).catch(falhou);
@@ -1005,6 +1017,58 @@
         });
       }
       desenhar();
+    });
+  }
+  // Escrever ou corrigir uma pergunta. Pergunta já respondida não se edita, para não mudar o sentido das respostas.
+  function telaEditarPergunta(id) {
+    comDados('perguntasLider', {}, function (r) {
+      var q = id ? r.sugestoes.concat(r.rascunhos, r.revisar, r.ativas).filter(function (x) { return x.id === id; })[0] : null;
+      var voltar = '<a class="voltar" href="#/lider/perguntas">' + I('voltar', 20) + 'Perguntas</a>';
+      if (id && !q) { telaErro('Pergunta não encontrada.', function () { location.hash = '#/lider/perguntas'; }); return; }
+      if (q && q.respostas) {
+        render(paginaSimples('<header class="cab-claro">' + voltar + '<h1 class="titulo">Editar pergunta</h1></header><main class="conteudo"><div class="resultado"><span class="circulo" style="background:var(--cinza-suave);color:var(--navy-2)">' + I('cadeado', 34) + '</span><h2>Já tem respostas</h2><p>Depois de respondida, a pergunta não pode mais mudar. Se precisar, exclua e crie outra.</p><a class="botao botao-contorno" href="#/lider/perguntas">Voltar</a></div></main>'));
+        return;
+      }
+      var v = q || { categoria: 'aovivo', a: '', b: '', c: '', d: '', texto: '', correta: '', explicacao: '', fonte: '', trilha: '', ordem: '', abre_iso: '', fecha_iso: '' };
+      function campoTexto(nome, rotulo, valor, classe, extra) { return '<div class="campo ' + (classe || '') + '"><label for="q-' + nome + '">' + esc(rotulo) + '</label><input id="q-' + nome + '" name="' + nome + '" class="entrada" value="' + esc(valor) + '" ' + (extra || '') + '></div>'; }
+      var letra = v.tipo === 'palavra' ? '' : v.correta;
+      var html = '<form class="secao" data-form="pergunta" style="gap:14px" novalidate>' +
+        '<div class="campo"><label for="q-categoria">Onde entra</label><select id="q-categoria" name="categoria" class="entrada">' + CATEGORIAS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === v.categoria ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        campoTexto('trilha', 'Nome da trilha', v.trilha, 'so-trilha', 'list="trilhas-form"') + '<datalist id="trilhas-form">' + r.trilhas.map(function (t) { return '<option value="' + esc(t) + '">'; }).join('') + '</datalist>' +
+        '<div class="grid2 so-semana">' + campoTexto('abre_em', 'Abre em', v.abre_iso, '', 'type="date"') + campoTexto('fecha_em', 'Fecha em', v.fecha_iso, '', 'type="date"') + '</div>' +
+        '<div class="campo"><label for="q-texto">Pergunta</label><textarea id="q-texto" name="texto" class="entrada" rows="3" maxlength="500">' + esc(v.texto) + '</textarea></div>' +
+        '<div class="secao so-multipla" style="gap:10px">' + ['a', 'b', 'c', 'd'].map(function (l) { return campoTexto(l, 'Alternativa ' + l.toUpperCase() + (l > 'b' ? ' (opcional)' : ''), v[l]); }).join('') +
+        '<div class="campo"><label for="q-letra">Alternativa certa</label><select id="q-letra" name="letra" class="entrada"><option value="">Escolha</option>' + ['A', 'B', 'C', 'D'].map(function (l) { return '<option value="' + l + '"' + (l === letra ? ' selected' : '') + '>' + l + '</option>'; }).join('') + '</select></div></div>' +
+        campoTexto('palavra', 'Palavra secreta', v.tipo === 'palavra' ? v.correta : '', 'so-palavra') +
+        campoTexto('ordem', 'Ordem em que aparece', v.ordem, 'so-ordem', 'type="number" min="1" inputmode="numeric" placeholder="Deixe em branco para ir por último"') +
+        '<div class="campo"><label for="q-explicacao">Explicação da resposta</label><textarea id="q-explicacao" name="explicacao" class="entrada" rows="2">' + esc(v.explicacao) + '</textarea></div>' +
+        campoTexto('fonte', 'Fonte (documento, revisão e item)', v.fonte, '', 'placeholder="PRO-0412 rev. 4 item 5.1"') +
+        '<p class="erro-campo" role="alert" id="erro-q"></p><button class="botao botao-grande" type="submit">Salvar pergunta</button>' +
+        (q ? '' : '<p class="muted" style="text-align:center">Ela entra como rascunho e só vai ao ar quando você ativar.</p>') + '</form>';
+      function ajustar(cat) {
+        function mostrar(classe, sim) { $app.querySelectorAll('.' + classe).forEach(function (el) { el.style.display = sim ? '' : 'none'; }); }
+        mostrar('so-trilha', cat === 'trilha');
+        mostrar('so-semana', cat === 'semana');
+        mostrar('so-multipla', cat !== 'desafio');
+        mostrar('so-palavra', cat === 'desafio');
+        mostrar('so-ordem', cat === 'trilha' || cat === 'aovivo');
+      }
+      render(paginaSimples('<header class="cab-claro">' + voltar + '<h1 class="titulo">' + (q ? 'Editar pergunta' : 'Nova pergunta') + '</h1></header><main class="conteudo">' + html + '</main>'), {
+        'input:categoria': function (i) { ajustar(i.value); },
+        'form:pergunta': function (f) {
+          var erro = document.getElementById('erro-q');
+          erro.textContent = '';
+          ocupado(f.querySelector('[type=submit]'), true);
+          var cat = f.categoria.value;
+          chamar('salvarPergunta', {
+            id: q ? q.id : '', categoria: cat, texto: f.texto.value, a: f.a.value, b: f.b.value, c: f.c.value, d: f.d.value,
+            correta: cat === 'desafio' ? f.palavra.value : f.letra.value, trilha: f.trilha.value, ordem: f.ordem.value,
+            abre_em: f.abre_em.value, fecha_em: f.fecha_em.value, explicacao: f.explicacao.value, fonte: f.fonte.value
+          }).then(function () { toast(q ? 'Pergunta salva.' : 'Pergunta salva como rascunho.', 'ok'); location.hash = '#/lider/perguntas'; })
+            .catch(function (e) { if (sessaoInvalida(e)) return; ocupado(f.querySelector('[type=submit]'), false); erro.textContent = e.message; });
+        }
+      });
+      ajustar(v.categoria);
     });
   }
   function telaImportar() {
@@ -1063,7 +1127,7 @@
         }
         if (passo > n) {
           render('<div class="tv">' + confetes(12) + '<a class="tv-sair" href="#/lider/validar">Sair da TV</a>' +
-            '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · ' + esc(r.equipe) + '</span><h1 class="tv-titulo">Destaques por atividade</h1><span class="tv-sub">Quem mais pontuou em cada atividade na semana</span></div></div>' +
+            '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · ' + esc(r.equipe) + '</span><h1 class="tv-titulo">Destaques por atividade</h1><span class="tv-sub">Quem mais pontuou em cada atividade no período</span></div></div>' +
             '<div class="tv-selos">' + r.destaques.map(function (d, i) {
               return '<div class="tv-selo pop" style="animation-delay:' + (i * 0.12).toFixed(2) + 's"><span class="selo-medalha" style="background:#FDF3D0;color:#8A6100;width:52px;height:52px">' + I('estrela', 26) + '</span><div class="texto-flex"><span class="tv-selo-nome">' + esc(d.selo) + '</span><span class="tv-selo-pessoa">' + esc(d.pessoa.nome) + ' · ' + d.pessoa.pontos + ' pts</span><span class="tv-selo-ativ">' + esc(d.atividade) + '</span></div></div>';
             }).join('') + '</div>' +
@@ -1074,7 +1138,7 @@
           return;
         }
         render('<div class="tv">' + (final && n ? confetes(16) : '') + '<a class="tv-sair" href="#/lider/validar">Sair da TV</a>' +
-          '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · ' + esc(r.equipe) + '</span><h1 class="tv-titulo">Placar da semana</h1><span class="tv-sub">' + esc(r.inicio_texto) + ' a ' + esc(r.fim_texto) + ' · entregas + quiz</span></div></div>' +
+          '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · ' + esc(r.equipe) + '</span><h1 class="tv-titulo">Placar do período</h1><span class="tv-sub">' + esc(r.inicio_texto) + ' a ' + esc(r.fim_texto) + ' · entregas + quiz</span></div></div>' +
           '<div class="tv-grade"><div class="tv-lista">' + linhas + '</div><div class="tv-lado">' + lado + '</div></div></div>', {
           revelar: revelar,
           recomecar: function () { passo = 0; desenhar(); },
@@ -1123,7 +1187,7 @@
       ultimo = k;
       var html;
       if (!r.ativo) {
-        html = '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop · reunião semanal</span><h1 class="tv-titulo">Quiz ao vivo</h1><span class="tv-sub">' + r.lista.length + ' perguntas prontas · ' + r.participantes + ' pessoas na equipe</span></div></div>' +
+        html = '<div class="tv-cab"><div style="display:flex;flex-direction:column;gap:6px"><span class="tv-rot">Pit Stop</span><h1 class="tv-titulo">Quiz ao vivo</h1><span class="tv-sub">' + r.lista.length + ' perguntas prontas · ' + r.participantes + ' pessoas na equipe</span></div></div>' +
           '<div class="tv-cartao" style="flex:1;justify-content:center;max-width:900px;margin:0 auto;width:100%">' + I('vivo', 64, '#FDBA74', 1.6) +
           '<p class="tv-pergunta" style="font-size:clamp(24px,3vw,38px)">Peça para todos abrirem o app no celular: Quiz › Quiz ao vivo</p><p class="tv-sub">Todos respondem no próprio celular. Pontos só pelo acerto, sem bônus de velocidade.</p>' +
           (r.lista.length ? '<button type="button" class="botao tv-botao" style="max-width:420px;margin-top:16px" data-acao="iniciar">Iniciar quiz ao vivo</button>' : '<p class="tv-sub" style="color:var(--pessego)">Ainda não há perguntas na categoria Quiz ao vivo. Cadastre em Perguntas.</p>') + '</div>';
@@ -1172,17 +1236,19 @@
   function telaConfig() {
     comDados('configLider', {}, function (r) {
       var grupos = [], porGrupo = {};
-      r.campos.forEach(function (c) { if (!porGrupo[c.grupo]) { porGrupo[c.grupo] = []; grupos.push(c.grupo); } porGrupo[c.grupo].push(c); });
+      var grupoAdmin = {};
+      r.campos.forEach(function (c) { if (!porGrupo[c.grupo]) { porGrupo[c.grupo] = []; grupos.push(c.grupo); } porGrupo[c.grupo].push(c); if (c.admin) grupoAdmin[c.grupo] = true; });
       function controle(c) {
         var v = r.valores[c.chave], id = 'cfg-' + c.chave;
         if (c.tipo === 'simnao') return '<label class="interruptor"><input type="checkbox" role="switch" id="' + id + '" name="' + c.chave + '"' + (/^(sim|s|true|1)$/i.test(String(v)) ? ' checked' : '') + '><span></span></label>';
         if (c.tipo === 'dia') return '<select id="' + id + '" name="' + c.chave + '" class="entrada" style="width:140px">' + DIAS.map(function (d, i) { return '<option value="' + i + '"' + (String(i) === String(v) ? ' selected' : '') + '>' + d + '</option>'; }).join('') + '</select>';
         if (c.tipo === 'hora') return '<input id="' + id + '" name="' + c.chave + '" type="time" class="entrada" style="width:120px" value="' + esc(v) + '">';
+        if (c.tipo === 'data') return '<input id="' + id + '" name="' + c.chave + '" type="date" class="entrada" style="width:160px" value="' + esc(v) + '">';
         if (c.tipo === 'numero') return '<input id="' + id + '" name="' + c.chave + '" type="number" inputmode="numeric" min="0" class="entrada" style="width:96px" value="' + esc(v) + '">';
         return '<input id="' + id + '" name="' + c.chave + '" class="entrada" value="' + esc(v) + '">';
       }
       var form = '<form class="secao" data-form="config" style="gap:18px">' + grupos.map(function (g) {
-        return '<section class="secao"><h2 class="h2">' + esc(g) + '</h2><div class="lista">' + porGrupo[g].map(function (c) {
+        return '<section class="secao"><h2 class="h2">' + esc(g) + (grupoAdmin[g] ? ' <span class="chip chip-escuro" style="vertical-align:middle">Administrador</span>' : '') + '</h2><div class="lista">' + porGrupo[g].map(function (c) {
           return c.tipo === 'texto' ? '<div class="item" style="flex-direction:column;align-items:stretch;gap:6px"><label for="cfg-' + c.chave + '" style="font-size:15px">' + esc(c.rotulo) + '</label>' + controle(c) + '</div>'
             : '<div class="item"><label for="cfg-' + c.chave + '" style="flex:1;font-size:15px">' + esc(c.rotulo) + '</label>' + controle(c) + '</div>';
         }).join('') + '</div></section>';
@@ -1191,15 +1257,23 @@
       var meta = '<form class="cartao" data-form="meta"><h2 class="h2">Meta coletiva</h2><p class="muted" style="font-size:14px">Quando a equipe bater a meta, todos ganham +' + mc.bonus + ' pts e a pergunta secreta é liberada.' + (mc.batida ? ' <b style="color:var(--verde)">Meta atual já foi batida.</b>' : '') + '</p>' +
         '<div class="campo"><label for="mt">Meta</label><input id="mt" name="texto" class="entrada" value="' + esc(mc.texto) + '"></div><div class="grid2"><div class="campo"><label for="ma">Já atingido</label><input id="ma" name="atual" type="number" min="0" class="entrada" value="' + mc.atual + '"></div><div class="campo"><label for="mtot">Total</label><input id="mtot" name="total" type="number" min="1" class="entrada" value="' + mc.total + '"></div></div>' +
         '<button class="botao botao-verde" type="submit">Atualizar meta</button></form>';
-      var planilha = Api.demo ? 'No modo demonstração estas listas são fixas.' : 'Para mudar, edite a aba correspondente na planilha.';
-      var tabelas = '<section class="secao"><h2 class="h2">Janelas por turno</h2><div class="caixa-rolavel"><table class="tabela"><thead><tr><th>Turno</th><th>Janelas</th></tr></thead><tbody>' + r.turnos.map(function (t) { return '<tr><td>' + esc(t.turno) + '</td><td>' + esc(t.janelas) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
-        '<h2 class="h2" style="margin-top:8px">Entregas, pontos e selos</h2><div class="caixa-rolavel"><table class="tabela"><thead><tr><th>Entrega</th><th>Pts</th><th>Referência</th><th>Sorteio</th><th>Selo</th></tr></thead><tbody>' + r.tipos.map(function (t) { return '<tr' + (t.ativo ? '' : ' style="opacity:.5"') + '><td>' + esc(t.nome) + '</td><td>' + t.pontos + '</td><td>' + esc(t.referencia) + '</td><td>' + (t.sorteavel ? 'sim' : 'não') + '</td><td>' + esc(t.selo || '—') + '</td></tr>'; }).join('') + '</tbody></table></div>' +
-        '<p class="muted">' + planilha + '</p></section>';
+      function atalho(href, icone, titulo, sub) { return '<a class="cartao linha-flex" href="' + href + '" style="text-decoration:none;color:inherit"><span class="icone-q">' + I(icone, 22) + '</span><span class="texto-flex"><span class="nome">' + esc(titulo) + '</span><span class="muted">' + esc(sub) + '</span></span>' + I('seta', 22) + '</a>'; }
+      var atalhos = atalho('#/lider/entregas', 'marcar', 'Entregas, pontos e selos', 'Cadastrar, ajustar e liberar para a equipe') + atalho('#/lider/janelas', 'relogio', 'Janelas de registro', 'Horários em que a equipe pode marcar');
+      var mural = '<form class="cartao" data-form="mural"><h2 class="h2">Mural de avisos</h2><p class="muted" style="font-size:14px">O aviso aparece na tela inicial de todos, até você trocar ou apagar.</p><div class="campo"><label for="mural">Aviso</label><textarea id="mural" name="texto" class="entrada" rows="3" maxlength="300">' + esc(r.mural) + '</textarea></div>' +
+        '<div class="botoes">' + (r.mural ? '<button type="button" class="botao botao-leve" data-acao="limparMural">Apagar aviso</button>' : '') + '<button class="botao" type="submit">Publicar aviso</button></div></form>';
       var ativos = r.pessoas.filter(function (p) { return p.ativo; }).length;
       var equipe = '<a class="cartao linha-flex" href="#/lider/equipe" style="text-decoration:none;color:inherit"><span class="icone-q">' + I('pessoas', 22) + '</span><span class="texto-flex"><span class="nome">Equipe</span><span class="muted">' + ativos + (ativos === 1 ? ' pessoa ativa' : ' pessoas ativas') + ' · cadastrar, editar e gerar PIN</span></span>' + I('seta', 22) + '</a>';
       var fim = '<section class="secao"><a class="botao botao-leve" href="#/inicio">Ver o app como a equipe</a><button type="button" class="botao botao-leve" data-acao="sair">' + I('sair', 20) + 'Sair do app</button>' +
         (Api.demo ? '<button type="button" class="botao botao-leve" data-acao="reiniciarDemo">Recomeçar a demonstração</button>' : '') + '</section>';
-      render(paginaLider('lider/config', cabLider('Ajustes', 'Regras, metas e módulos', 'ajustes') + '<main class="conteudo" style="gap:22px">' + equipe + meta + form + tabelas + fim + '</main>'), {
+      render(paginaLider('lider/config', cabLider('Ajustes', 'Regras, metas e módulos', 'ajustes') + '<main class="conteudo" style="gap:22px">' + equipe + atalhos + mural + meta + form + fim + '</main>'), {
+        'form:mural': function (f) {
+          ocupado(f.querySelector('[type=submit]'), true);
+          chamar('salvarMural', { texto: f.texto.value }).then(function () { toast(f.texto.value.trim() ? 'Aviso publicado.' : 'Aviso apagado.', 'ok'); telaConfig(); }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
+        },
+        limparMural: function (b) {
+          ocupado(b, true);
+          chamar('salvarMural', { texto: '' }).then(function () { toast('Aviso apagado.', 'ok'); telaConfig(); }).catch(function (e) { ocupado(b, false); falhou(e); });
+        },
         'form:config': function (f) {
           var valores = {};
           r.campos.forEach(function (c) { var el = f.elements[c.chave]; if (!el) return; valores[c.chave] = c.tipo === 'simnao' ? (el.checked ? 'sim' : 'nao') : el.value; });
@@ -1231,8 +1305,9 @@
         return r.turnos.map(function (t) { return '<option value="' + esc(t) + '"' + (t === sel ? ' selected' : '') + '>Turno ' + esc(t) + '</option>'; }).join('');
       }
       function opcoesPapel(sel) {
-        return '<option value="equipe"' + (sel !== 'lider' ? ' selected' : '') + '>Equipe</option><option value="lider"' + (sel === 'lider' ? ' selected' : '') + '>Líder</option>';
+        return '<option value="equipe"' + (sel === 'equipe' ? ' selected' : '') + '>Equipe</option><option value="lider"' + (sel === 'lider' ? ' selected' : '') + '>Líder</option>' + (r.eu_admin ? '<option value="admin"' + (sel === 'admin' ? ' selected' : '') + '>Administrador</option>' : '');
       }
+      function cargo(p) { return p.admin ? 'admin' : p.papel; }
       var blocos = [];
       if (aviso && aviso.pin) {
         blocos.push('<div class="cartao-verde" style="flex-direction:column;align-items:stretch;gap:10px" role="status">' +
@@ -1250,19 +1325,19 @@
         '<button class="botao" type="submit">Cadastrar e gerar PIN</button></form>');
       var ativos = r.pessoas.filter(function (p) { return p.ativo; }).length;
       blocos.push('<section class="secao"><h2 class="h2">Pessoas · ' + ativos + (ativos === 1 ? ' ativa' : ' ativas') + '</h2>' + r.pessoas.map(function (p) {
-        var chips = (p.papel === 'lider' ? '<span class="chip chip-escuro">Líder</span>' : '<span class="chip chip-cinza">Turno ' + esc(p.turno || '–') + '</span>') +
+        var chips = (p.papel === 'lider' ? '<span class="chip chip-escuro">' + (p.admin ? 'Administrador' : 'Líder') + '</span>' : '<span class="chip chip-cinza">Turno ' + esc(p.turno || '–') + '</span>') +
           '<span class="chip chip-cinza">Código ' + esc(p.codigo || '–') + '</span>' +
           (p.voce ? '<span class="chip chip-azul">Você</span>' : '') + (p.ativo ? '' : '<span class="chip chip-vermelho">Desativada</span>') +
           (p.bloqueado ? '<span class="chip chip-vermelho">Travada</span>' : '');
         return '<details class="cartao"' + (p.ativo ? '' : ' style="opacity:.75"') + '><summary style="gap:10px">' + A(p.avatar, 36) + '<span class="texto-flex"><span class="nome">' + esc(p.nome) + '</span><span style="display:flex;gap:6px;flex-wrap:wrap">' + chips + '</span></span></summary>' +
-          '<form data-form="pessoa" data-id="' + esc(p.id) + '" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">' +
+          (p.admin && !r.eu_admin ? '<p class="muted" style="margin-top:12px;font-size:14px">Só o Administrador pode alterar este cadastro.</p></details>' : '<form data-form="pessoa" data-id="' + esc(p.id) + '" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">' +
           '<div class="campo"><label for="pn-' + esc(p.id) + '">Nome</label><input id="pn-' + esc(p.id) + '" name="nome" class="entrada" maxlength="40" value="' + esc(p.nome) + '" required></div>' +
           '<div class="grid2"><div class="campo"><label for="pt-' + esc(p.id) + '">Turno</label><select id="pt-' + esc(p.id) + '" name="turno" class="entrada">' + opcoesTurno(p.turno) + '</select></div>' +
-          '<div class="campo"><label for="pp-' + esc(p.id) + '">Papel</label><select id="pp-' + esc(p.id) + '" name="papel" class="entrada"' + (p.voce ? ' disabled' : '') + '>' + opcoesPapel(p.papel) + '</select></div></div>' +
+          '<div class="campo"><label for="pp-' + esc(p.id) + '">Papel</label><select id="pp-' + esc(p.id) + '" name="papel" class="entrada"' + (p.voce ? ' disabled' : '') + '>' + opcoesPapel(cargo(p)) + '</select></div></div>' +
           '<div class="item" style="padding:0;min-height:44px"><label for="pa-' + esc(p.id) + '" style="flex:1;font-size:15px">Ativa no app</label><label class="interruptor"><input type="checkbox" role="switch" id="pa-' + esc(p.id) + '" name="ativo"' + (p.ativo ? ' checked' : '') + (p.voce ? ' disabled' : '') + '><span></span></label></div>' +
           (p.voce ? '<p class="muted" style="font-size:13px">Você não pode desativar o seu cadastro nem deixar de ser líder.</p>' : '') +
           '<div class="grid2"><button class="botao" type="submit">Salvar</button><button type="button" class="botao botao-contorno" data-acao="novoPin" data-id="' + esc(p.id) + '">Gerar novo PIN</button></div>' +
-          '</form></details>';
+          '</form></details>');
       }).join('') + '</section>');
       blocos.push('<p class="muted" style="font-size:14px">Ninguém é excluído. Quem sai da equipe fica desativado: some do app, e o histórico continua guardado para os dados do TCC.</p>' +
         '<a class="botao botao-leve" href="#/lider/config">' + I('voltar', 20) + 'Voltar aos ajustes</a>');
@@ -1278,7 +1353,7 @@
           var id = f.getAttribute('data-id');
           var p = r.pessoas.filter(function (x) { return x.id === id; })[0] || {};
           ocupado(f.querySelector('[type=submit]'), true);
-          chamar('salvarPessoa', { id: id, nome: f.nome.value, turno: f.turno.value, papel: p.voce ? 'lider' : f.papel.value, ativo: p.voce ? 'sim' : (f.ativo.checked ? 'sim' : 'nao') }).then(function () {
+          chamar('salvarPessoa', { id: id, nome: f.nome.value, turno: f.turno.value, papel: p.voce ? cargo(p) : f.papel.value, ativo: p.voce ? 'sim' : (f.ativo.checked ? 'sim' : 'nao') }).then(function () {
             toast('Cadastro salvo.', 'ok');
             telaEquipe();
           }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
@@ -1289,6 +1364,82 @@
             if (x.proprio) atualizarSessao({ pin: x.pin, codigo: x.codigo });
             telaEquipe('', { nome: x.nome, pin: x.pin, codigo: x.codigo });
           }).catch(function (e) { ocupado(b, false); falhou(e); });
+        }
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Líder: janelas de registro
+  // ---------------------------------------------------------------------------
+  function telaJanelas() {
+    comDados('janelasLider', {}, function (r) {
+      function formTurno(t, chave) {
+        var faixas = t ? t.faixas.slice() : [];
+        while (faixas.length < 3) faixas.push({ ini: '', fim: '' });
+        return '<form class="secao" data-form="turno" data-antigo="' + esc(t ? t.turno : '') + '" style="gap:12px;margin-top:12px">' +
+          '<div class="campo"><label for="tn-' + chave + '">Nome do turno</label><input id="tn-' + chave + '" name="turno" class="entrada" maxlength="20" value="' + esc(t ? t.turno : '') + '"></div>' +
+          faixas.map(function (f, i) {
+            return '<div class="grid2"><div class="campo"><label for="ti-' + chave + i + '">Janela ' + (i + 1) + ': início</label><input id="ti-' + chave + i + '" data-faixa="ini" type="time" class="entrada" value="' + esc(f.ini) + '"></div><div class="campo"><label for="tf-' + chave + i + '">Fim</label><input id="tf-' + chave + i + '" data-faixa="fim" type="time" class="entrada" value="' + esc(f.fim) + '"></div></div>';
+          }).join('') +
+          '<div class="botoes">' + (t ? '<button type="button" class="botao botao-leve" data-acao="removerTurno" data-t="' + esc(t.turno) + '">Remover</button>' : '') + '<button class="botao" type="submit">' + (t ? 'Salvar' : 'Adicionar turno') + '</button></div></form>';
+      }
+      var html = '<p class="muted" style="font-size:14px">A equipe só consegue marcar entregas e responder ao quiz dentro destes horários. Janela que passa da meia-noite é aceita. Deixe em branco as que não usar.</p>' +
+        r.turnos.map(function (t, i) {
+          return '<details class="cartao"' + (r.turnos.length === 1 ? ' open' : '') + '><summary style="gap:10px"><span class="texto-flex"><span class="nome">Turno ' + esc(t.turno) + '</span><span class="muted">' + esc(t.faixas.map(function (f) { return f.ini + '–' + f.fim; }).join(' e ') || 'Sem janelas') + ' · ' + t.pessoas + (t.pessoas === 1 ? ' pessoa' : ' pessoas') + '</span></span></summary>' + formTurno(t, 't' + i) + '</details>';
+        }).join('') +
+        '<details class="cartao"><summary><span class="nome">Adicionar turno</span></summary>' + formTurno(null, 'novo') + '</details>' +
+        '<a class="botao botao-leve" href="#/lider/config">' + I('voltar', 20) + 'Voltar aos ajustes</a>';
+      render(paginaLider('lider/config', cabLider('Janelas', 'Horários de registro por turno', 'relogio') + '<main class="conteudo" style="gap:14px">' + html + '</main>'), {
+        'form:turno': function (f) {
+          var inis = f.querySelectorAll('[data-faixa="ini"]'), fins = f.querySelectorAll('[data-faixa="fim"]'), faixas = [];
+          for (var i = 0; i < inis.length; i++) faixas.push({ ini: inis[i].value, fim: fins[i].value });
+          ocupado(f.querySelector('[type=submit]'), true);
+          chamar('salvarTurno', { antigo: f.getAttribute('data-antigo'), turno: f.turno.value, faixas: faixas }).then(function () { toast('Janelas salvas.', 'ok'); telaJanelas(); }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
+        },
+        removerTurno: function (b) {
+          if (!window.confirm('Remover este turno?')) return;
+          ocupado(b, true);
+          chamar('removerTurno', { turno: b.getAttribute('data-t') }).then(function () { toast('Turno removido.', 'ok'); telaJanelas(); }).catch(function (e) { ocupado(b, false); falhou(e); });
+        }
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Líder: entregas, pontos e selos
+  // ---------------------------------------------------------------------------
+  function telaEntregas() {
+    comDados('entregasLider', {}, function (r) {
+      function chave(c, nome, rotulo, ligado) { return '<div class="item" style="padding:0;min-height:44px"><label for="' + nome + '-' + c + '" style="flex:1;font-size:15px">' + esc(rotulo) + '</label><label class="interruptor"><input type="checkbox" role="switch" id="' + nome + '-' + c + '" name="' + nome + '"' + (ligado ? ' checked' : '') + '><span></span></label></div>'; }
+      function formEntrega(e, c) {
+        var v = e || { nome: '', categoria: '', pontos: 5, referencia: 'nao', dica_ref: '', ref_unica: false, sorteavel: false, max_por_dia: 0, selo: '', ativo: false, formato: { tipo: 'livre', min: '', max: '' } };
+        var refs = [['nao', 'Não pede'], ['opcional', 'Opcional'], ['obrigatoria', 'Obrigatório']];
+        var formato = !r.admin ? '' :
+          '<div class="campo"><label for="fm-' + c + '">Formato do número <span class="chip chip-escuro">Administrador</span></label><select id="fm-' + c + '" name="formato" class="entrada"><option value="livre"' + (v.formato.tipo === 'livre' ? ' selected' : '') + '>Livre</option><option value="numeros"' + (v.formato.tipo === 'numeros' ? ' selected' : '') + '>Somente números</option>' + (v.formato.tipo === 'personalizado' ? '<option value="personalizado" selected>Personalizado (mantido)</option>' : '') + '</select></div>' +
+          '<div class="grid2"><div class="campo"><label for="fa-' + c + '">Mínimo de dígitos</label><input id="fa-' + c + '" name="fmin" type="number" min="1" max="20" class="entrada" value="' + esc(v.formato.min) + '"></div><div class="campo"><label for="fb-' + c + '">Máximo de dígitos</label><input id="fb-' + c + '" name="fmax" type="number" min="1" max="20" class="entrada" value="' + esc(v.formato.max) + '"></div></div>';
+        return '<form data-form="entrega" data-id="' + esc(e ? e.id : '') + '" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">' +
+          '<div class="campo"><label for="en-' + c + '">Nome da entrega</label><input id="en-' + c + '" name="nome" class="entrada" maxlength="60" value="' + esc(v.nome) + '"></div>' +
+          '<div class="grid2"><div class="campo"><label for="ec-' + c + '">Categoria</label><input id="ec-' + c + '" name="categoria" class="entrada" placeholder="Qualidade" value="' + esc(v.categoria) + '"></div><div class="campo"><label for="ep-' + c + '">Pontos</label><input id="ep-' + c + '" name="pontos" type="number" min="0" max="1000" inputmode="numeric" class="entrada" value="' + v.pontos + '"></div></div>' +
+          '<div class="grid2"><div class="campo"><label for="er-' + c + '">Número de referência</label><select id="er-' + c + '" name="referencia" class="entrada">' + refs.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === v.referencia ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div><div class="campo"><label for="em-' + c + '">Máximo por dia (0 = sem limite)</label><input id="em-' + c + '" name="max_por_dia" type="number" min="0" max="20" inputmode="numeric" class="entrada" value="' + v.max_por_dia + '"></div></div>' +
+          '<div class="campo"><label for="ed-' + c + '">Dica para o número</label><input id="ed-' + c + '" name="dica_ref" class="entrada" placeholder="nº da RAF, ex.: 0457" value="' + esc(v.dica_ref) + '"></div>' +
+          '<div class="campo"><label for="es-' + c + '">Selo (em branco: não dá selo)</label><input id="es-' + c + '" name="selo" class="entrada" list="selos-form" value="' + esc(v.selo) + '"></div>' + formato +
+          chave(c, 'sorteavel', 'Pode cair no sorteio de conferência', v.sorteavel) + chave(c, 'ref_unica', 'Avisar se o número se repetir entre pessoas', v.ref_unica) + chave(c, 'ativo', 'Disponível para a equipe', v.ativo) +
+          '<button class="botao" type="submit">' + (e ? 'Salvar entrega' : 'Cadastrar entrega') + '</button></form>';
+      }
+      var html = '<p class="muted" style="font-size:14px">Mudar os pontos vale só para as próximas validações. Para retirar uma entrega, deixe-a indisponível.</p>' +
+        '<datalist id="selos-form">' + r.selos.map(function (s) { return '<option value="' + esc(s) + '">'; }).join('') + '</datalist>' +
+        '<details class="cartao"><summary><span class="nome">Cadastrar nova entrega</span></summary>' + formEntrega(null, 'nova') + '<p class="muted" style="font-size:13px;margin-top:8px">Ela fica indisponível até você ligar a opção acima.</p></details>' +
+        '<section class="secao"><h2 class="h2">Entregas · ' + r.entregas.length + '</h2>' + r.entregas.map(function (e, i) {
+          return '<details class="cartao"' + (e.ativo ? '' : ' style="opacity:.75"') + '><summary style="gap:10px"><span class="texto-flex"><span class="nome">' + esc(e.nome) + '</span><span style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip chip-laranja">+' + e.pontos + ' pts</span>' + (e.selo ? '<span class="chip chip-cinza">' + esc(e.selo) + '</span>' : '') + (e.ativo ? '' : '<span class="chip chip-vermelho">Indisponível</span>') + '</span></span></summary>' + formEntrega(e, 'e' + i) + '</details>';
+        }).join('') + '</section>' +
+        '<a class="botao botao-leve" href="#/lider/config">' + I('voltar', 20) + 'Voltar aos ajustes</a>';
+      render(paginaLider('lider/config', cabLider('Entregas', 'Entregas, pontos e selos', 'marcar') + '<main class="conteudo" style="gap:14px">' + html + '</main>'), {
+        'form:entrega': function (f) {
+          var dados = { id: f.getAttribute('data-id'), nome: f.nome.value, categoria: f.categoria.value, pontos: f.pontos.value, referencia: f.referencia.value, dica_ref: f.dica_ref.value, max_por_dia: f.max_por_dia.value, selo: f.selo.value, sorteavel: f.sorteavel.checked ? 'sim' : 'nao', ref_unica: f.ref_unica.checked ? 'sim' : 'nao', ativo: f.ativo.checked ? 'sim' : 'nao' };
+          if (f.formato) dados.formato = { tipo: f.formato.value, min: f.fmin.value, max: f.fmax.value };
+          ocupado(f.querySelector('[type=submit]'), true);
+          chamar('salvarEntrega', dados).then(function () { toast('Entrega salva.', 'ok'); telaEntregas(); }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
         }
       });
     });
