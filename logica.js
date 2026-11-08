@@ -19,7 +19,7 @@ var Logica = (function () {
   var TABELAS = {
     Config: ['chave', 'valor', 'descricao'],
     Turnos: ['turno', 'janelas'],
-    Pessoas: ['id', 'nome', 'turno', 'papel', 'pin', 'avatar', 'ativo'],
+    Pessoas: ['id', 'nome', 'turno', 'papel', 'pin', 'avatar', 'ativo', 'codigo', 'erros_pin', 'bloqueado_ate'],
     TiposEntrega: ['id', 'nome', 'categoria', 'pontos', 'referencia', 'formato_ref', 'dica_ref', 'ref_unica', 'sorteavel', 'max_por_dia', 'selo', 'ativo'],
     Registros: ['id', 'pessoa_id', 'tipo_id', 'data_execucao', 'criado_em', 'referencia', 'status', 'pontos', 'atrasada', 'sorteada', 'conferencia', 'alerta', 'validado_em', 'validado_por', 'celebrado', 'obs'],
     Perguntas: ['id', 'categoria', 'tipo', 'texto', 'a', 'b', 'c', 'd', 'correta', 'explicacao', 'fonte', 'trilha', 'ordem', 'abre_em', 'fecha_em', 'pontos', 'status', 'autor_id', 'criado_em'],
@@ -29,8 +29,8 @@ var Logica = (function () {
   };
 
   // Campos guardados como data na planilha e campos que precisam ficar como texto
-  var CAMPOS_DATA = { data_execucao: 1, criado_em: 1, validado_em: 1, abre_em: 1, fecha_em: 1, inicio: 1, fim: 1 };
-  var CAMPOS_TEXTO = { id: 1, pin: 1, referencia: 1, resposta: 1, correta: 1, pessoa_id: 1, tipo_id: 1, pergunta_id: 1, autor_id: 1, validado_por: 1, criado_por: 1, sessao: 1, turno: 1, chave: 1, valor: 1, formato_ref: 1, janelas: 1, ranking: 1, evoluiu: 1 };
+  var CAMPOS_DATA = { data_execucao: 1, criado_em: 1, validado_em: 1, abre_em: 1, fecha_em: 1, inicio: 1, fim: 1, bloqueado_ate: 1 };
+  var CAMPOS_TEXTO = { id: 1, pin: 1, codigo: 1, referencia: 1, resposta: 1, correta: 1, pessoa_id: 1, tipo_id: 1, pergunta_id: 1, autor_id: 1, validado_por: 1, criado_por: 1, sessao: 1, turno: 1, chave: 1, valor: 1, formato_ref: 1, janelas: 1, ranking: 1, evoluiu: 1 };
 
   var AVATARES = ['rodeiro', 'capacete', 'engrenagem', 'chave', 'raio', 'lupa', 'locomotiva', 'trilho'];
 
@@ -73,6 +73,8 @@ var Logica = (function () {
     ['meta_coletiva_total', '10', 'Total da meta coletiva'],
     ['meta_coletiva_bonus', '20', 'Bônus para todos quando a meta coletiva é batida'],
     ['meta_coletiva_batida', 'nao', 'Preenchido pelo app (sim/nao)'],
+    ['pin_max_erros', '5', 'Quantos erros seguidos de PIN travam a entrada daquela pessoa'],
+    ['pin_bloqueio_min', '15', 'Por quantos minutos a entrada fica travada'],
     ['modulo_quiz', 'sim', 'Módulo: quiz'],
     ['modulo_sorteio', 'sim', 'Módulo: sorteio de conferência'],
     ['modulo_apuracao', 'sim', 'Módulo: posições do Placar só no Pit Stop (apuração semanal)'],
@@ -107,6 +109,8 @@ var Logica = (function () {
     { chave: 'premio_evolucao', rotulo: 'Reconhecimento de quem mais evoluiu', tipo: 'texto', grupo: 'Placar e Pit Stop' },
     { chave: 'selo_prata', rotulo: 'Meses com o mesmo selo para a prata', tipo: 'numero', grupo: 'Selos' },
     { chave: 'selo_ouro', rotulo: 'Meses com o mesmo selo para o ouro', tipo: 'numero', grupo: 'Selos' },
+    { chave: 'pin_max_erros', rotulo: 'Erros seguidos de PIN até travar (3 a 20)', tipo: 'numero', grupo: 'Segurança' },
+    { chave: 'pin_bloqueio_min', rotulo: 'Tempo travado, em minutos (1 a 1440)', tipo: 'numero', grupo: 'Segurança' },
     { chave: 'modulo_quiz', rotulo: 'Quiz', tipo: 'simnao', grupo: 'Módulos' },
     { chave: 'modulo_sorteio', rotulo: 'Sorteio de conferência', tipo: 'simnao', grupo: 'Módulos' },
     { chave: 'modulo_apuracao', rotulo: 'Posições só no Pit Stop', tipo: 'simnao', grupo: 'Módulos' },
@@ -212,6 +216,7 @@ var Logica = (function () {
       db: db,
       agora: opcoes.agora || Date.now(),
       rnd: opcoes.aleatorio || Math.random,
+      adiarLogin: !!opcoes.adiarLogin,
       t: function (nome) { if (!cache[nome]) cache[nome] = db.ler(nome); return cache[nome]; },
       ins: function (nome, obj) { db.inserir(nome, obj); if (cache[nome]) cache[nome].push(Object.assign({}, obj)); },
       upd: function (nome, campo, valor, patch) {
@@ -290,11 +295,62 @@ var Logica = (function () {
     throw erro('Não foi possível gerar um PIN. Tente de novo.');
   }
 
+  // Código de acesso: 4 caracteres sorteados, sem os que se confundem (0/O, 1/I) e sem E,
+  // para a planilha nunca ler um código como número. Não deriva do nome, para não revelar a pessoa.
+  var LETRAS_CODIGO = '23456789ABCDFGHJKLMNPQRSTUVWXYZ';
+  function normCodigo(c) { return txt(c).toUpperCase().replace(/\s+/g, ''); }
+  function sortearCodigo(usados) {
+    for (var i = 0; i < 200; i++) {
+      var c = '';
+      for (var j = 0; j < 4; j++) c += LETRAS_CODIGO.charAt(Math.floor(Math.random() * LETRAS_CODIGO.length));
+      if (!usados[c]) return c;
+    }
+    throw erro('Não foi possível gerar um código. Tente de novo.');
+  }
+  function codigosUsados(pessoas) {
+    var usados = {};
+    pessoas.forEach(function (p) { if (txt(p.codigo)) usados[normCodigo(p.codigo)] = 1; });
+    return usados;
+  }
+  // Dá código a quem ainda não tem (planilha antiga, linha digitada à mão, demonstração antiga).
+  function garantirCodigos(db) {
+    var pessoas = db.ler('Pessoas'), usados = codigosUsados(pessoas), n = 0;
+    pessoas.forEach(function (p) {
+      if (!txt(p.id) || txt(p.codigo)) return;
+      var c = sortearCodigo(usados);
+      usados[c] = 1;
+      db.atualizar('Pessoas', 'id', txt(p.id), { codigo: c });
+      n++;
+    });
+    return n;
+  }
+
+  function erroLogin() { return erro('Código ou PIN incorreto.'); }
+  function erroBloqueio(ate, agora) { return erro('Muitas tentativas erradas. Tente de novo em ' + Math.max(1, Math.ceil((ate - agora) / MIN)) + ' min.'); }
+
+  // O login aceita só o código sorteado. O id não serve, porque vem do nome e é fácil de adivinhar.
   function autenticar(ctx, req) {
-    var p = pessoaPorId(ctx, req.pessoa_id);
-    if (!p || !sim(p.ativo)) throw erro('Pessoa não encontrada. Peça ao líder para conferir o cadastro.');
-    if (txt(p.pin) === '' || txt(p.pin) !== txt(req.pin)) throw erro('PIN incorreto.');
-    return p;
+    var codigo = normCodigo(req.codigo_acesso);
+    var p = codigo ? pessoasAtivas(ctx).filter(function (x) { return normCodigo(x.codigo) === codigo; })[0] : null;
+    if (!p) throw erroLogin();
+    var ate = lerData(p.bloqueado_ate, ctx.fuso);
+    if (ate > ctx.agora) throw erroBloqueio(ate, ctx.agora);
+    var erros = num(p.erros_pin, 0);
+    var errado = txt(p.pin) === '' || txt(p.pin) !== txt(req.pin);
+    if (!errado && !erros && !ate) return p;
+    // Daqui em diante é preciso gravar na planilha. Chamadas só de leitura correm sem trava,
+    // então pedem para repetir com a trava, senão tentativas simultâneas escapariam da contagem.
+    if (ctx.adiarLogin) { var e = new Error('repetir'); e.repetirComTrava = true; throw e; }
+    var id = txt(p.id);
+    if (!errado) { ctx.upd('Pessoas', 'id', id, { erros_pin: 0, bloqueado_ate: '' }); return p; }
+    erros++;
+    if (erros >= Math.max(3, num(ctx.cfg.pin_max_erros, 5))) {
+      var fim = ctx.agora + Math.max(1, num(ctx.cfg.pin_bloqueio_min, 15)) * MIN;
+      ctx.upd('Pessoas', 'id', id, { erros_pin: 0, bloqueado_ate: fim });
+      throw erroBloqueio(fim, ctx.agora);
+    }
+    ctx.upd('Pessoas', 'id', id, { erros_pin: erros, bloqueado_ate: '' });
+    throw erroLogin();
   }
 
   function resumoRegistro(ctx, r) {
@@ -622,8 +678,7 @@ var Logica = (function () {
     inicio: function (ctx) {
       return {
         ok: true, versao: VERSAO,
-        app: appInfo(ctx),
-        pessoas: pessoasAtivas(ctx).map(pessoaPublica).sort(function (a, b) { return a.nome.localeCompare(b.nome); })
+        app: appInfo(ctx)
       };
     }
   };
@@ -633,7 +688,7 @@ var Logica = (function () {
   // ---------------------------------------------------------------------------
   var EQUIPE = {
     entrar: function (ctx, req, pessoa) {
-      return { ok: true, pessoa: pessoaPublica(pessoa), modulos: modulos(ctx), app: appInfo(ctx) };
+      return { ok: true, pessoa: pessoaPublica(pessoa), codigo: normCodigo(pessoa.codigo), modulos: modulos(ctx), app: appInfo(ctx) };
     },
 
     painel: function (ctx, req, pessoa) {
@@ -1240,7 +1295,7 @@ var Logica = (function () {
     // ----- Cadastro da equipe pelo app -----
     equipeLider: function (ctx, req, lider) {
       var pessoas = ctx.t('Pessoas').filter(function (p) { return txt(p.id); }).map(function (p) {
-        var x = pessoaPublica(p); x.ativo = sim(p.ativo); x.voce = txt(p.id) === txt(lider.id); return x;
+        var x = pessoaPublica(p); x.ativo = sim(p.ativo); x.voce = txt(p.id) === txt(lider.id); x.codigo = normCodigo(p.codigo); x.bloqueado = lerData(p.bloqueado_ate, ctx.fuso) > ctx.agora; return x;
       }).sort(function (a, b) { return (b.ativo - a.ativo) || (b.papel === 'lider') - (a.papel === 'lider') || a.nome.localeCompare(b.nome, 'pt-BR'); });
       return { ok: true, pessoas: pessoas, turnos: turnosCadastrados(ctx) };
     },
@@ -1258,9 +1313,9 @@ var Logica = (function () {
       if (repetido) throw erro('Já existe alguém com o nome "' + txt(repetido.nome) + '". Use um sobrenome ou apelido para diferenciar.');
       if (!id) {
         var pin = gerarPin(ctx, '');
-        var novo = { id: idPessoa(ctx, nome), nome: nome, turno: turno, papel: papel, pin: pin, avatar: 'rodeiro', ativo: 'sim' };
+        var novo = { id: idPessoa(ctx, nome), nome: nome, turno: turno, papel: papel, pin: pin, avatar: 'rodeiro', ativo: 'sim', codigo: sortearCodigo(codigosUsados(ctx.t('Pessoas'))), erros_pin: 0, bloqueado_ate: '' };
         ctx.ins('Pessoas', novo);
-        return { ok: true, novo: true, id: novo.id, nome: nome, pin: pin };
+        return { ok: true, novo: true, id: novo.id, nome: nome, pin: pin, codigo: novo.codigo };
       }
       var p = pessoaPorId(ctx, id);
       if (!p) throw erro('Pessoa não encontrada.');
@@ -1275,8 +1330,10 @@ var Logica = (function () {
       var p = pessoaPorId(ctx, req.id);
       if (!p) throw erro('Pessoa não encontrada.');
       var pin = gerarPin(ctx, txt(p.id));
-      ctx.upd('Pessoas', 'id', txt(p.id), { pin: pin });
-      return { ok: true, id: txt(p.id), nome: txt(p.nome), pin: pin, proprio: txt(p.id) === txt(lider.id) };
+      // Gerar PIN novo também destrava a pessoa e dá código a quem foi cadastrado à mão na planilha
+      var codigo = normCodigo(p.codigo) || sortearCodigo(codigosUsados(ctx.t('Pessoas')));
+      ctx.upd('Pessoas', 'id', txt(p.id), { pin: pin, codigo: codigo, erros_pin: 0, bloqueado_ate: '' });
+      return { ok: true, id: txt(p.id), nome: txt(p.nome), pin: pin, codigo: codigo, proprio: txt(p.id) === txt(lider.id) };
     },
 
     salvarConfig: function (ctx, req) {
@@ -1289,6 +1346,8 @@ var Logica = (function () {
         if (e.tipo === 'hora' && hhmm(valor) < 0) throw erro('Hora inválida em "' + e.rotulo + '". Use 09:00.');
         if (e.chave === 'nivel_total' && (valor < 3 || valor > 10)) throw erro('A quantidade de níveis vai de 3 a 10.');
         if (e.chave === 'nome_app' && !txt(valor)) throw erro('O nome do app não pode ficar vazio.');
+        if (e.chave === 'pin_max_erros' && (valor < 3 || valor > 20)) throw erro('Os erros de PIN até travar vão de 3 a 20.');
+        if (e.chave === 'pin_bloqueio_min' && (valor < 1 || valor > 1440)) throw erro('O tempo travado vai de 1 a 1440 minutos.');
         gravarConfig(ctx, e.chave, valor);
       });
       return { ok: true };
@@ -1370,6 +1429,7 @@ var Logica = (function () {
       if (!ehLider(pessoa)) throw erro('Só o líder pode fazer isso.');
       return LIDER[acao](ctx, req, pessoa);
     } catch (e) {
+      if (e && e.repetirComTrava) return { ok: false, repetir_com_trava: true };
       return { ok: false, erro: e && e.amigavel ? e.message : 'Erro inesperado: ' + (e && e.message ? e.message : e) };
     }
   }
@@ -1425,6 +1485,7 @@ var Logica = (function () {
         { id: 'lider', nome: 'Diego (líder)', turno: 'A', papel: 'lider', pin: '1234', avatar: 'locomotiva', ativo: 'sim' },
         { id: 'pessoa1', nome: 'Pessoa de exemplo', turno: 'A', papel: 'equipe', pin: '0000', avatar: 'rodeiro', ativo: 'sim' }
       ];
+      garantirCodigos(criarDbMemoria(dados));
       return dados;
     }
 
@@ -1445,6 +1506,7 @@ var Logica = (function () {
     ];
     dados.Pessoas.push({ id: 'diego', nome: 'Diego (líder)', turno: 'A', papel: 'lider', pin: '1234', avatar: 'locomotiva', ativo: 'sim' });
     equipe.forEach(function (e) { dados.Pessoas.push({ id: e[0], nome: e[1], turno: e[2], papel: 'equipe', pin: e[3], avatar: e[4], ativo: 'sim' }); });
+    garantirCodigos(criarDbMemoria(dados));
 
     var semente = 20261116;
     function rnd() { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; }
@@ -1528,7 +1590,7 @@ var Logica = (function () {
   var api = {
     VERSAO: VERSAO, TABELAS: TABELAS, CAMPOS_DATA: CAMPOS_DATA, CAMPOS_TEXTO: CAMPOS_TEXTO, AVATARES: AVATARES,
     SOMENTE_LEITURA: SOMENTE_LEITURA, CONFIG_PADRAO: CONFIG_PADRAO,
-    executar: executar, criarDbMemoria: criarDbMemoria, dadosIniciais: dadosIniciais,
+    executar: executar, criarDbMemoria: criarDbMemoria, dadosIniciais: dadosIniciais, garantirCodigos: garantirCodigos,
     _interno: { nivelPonto: nivelPonto, selosDaPessoa: selosDaPessoa, inicioSemana: inicioSemana, inicioDia: inicioDia, partes: partes, lerData: lerData, estadoJanela: estadoJanela, criarCtx: criarCtx }
   };
   return api;

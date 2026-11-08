@@ -34,7 +34,7 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function lerSessao() { try { return JSON.parse(localStorage.getItem(CHAVE_SESSAO) || 'null'); } catch (e) { return null; } }
+  function lerSessao() { try { var s = JSON.parse(localStorage.getItem(CHAVE_SESSAO) || 'null'); return s && s.codigo ? s : null; } catch (e) { return null; } }
   function gravarSessao(s) {
     sessao = s;
     try { if (s) localStorage.setItem(CHAVE_SESSAO, JSON.stringify(s)); else localStorage.removeItem(CHAVE_SESSAO); } catch (e) { /* ignora */ }
@@ -50,7 +50,7 @@
   function idSeguro(id) { return window.CSS && CSS.escape ? CSS.escape(id) : String(id).replace(/[^\w-]/g, ''); }
 
   function chamar(acao, dados) {
-    var base = sessao ? { pessoa_id: sessao.pessoa_id, pin: sessao.pin } : {};
+    var base = sessao ? { codigo_acesso: sessao.codigo, pin: sessao.pin } : {};
     var tela = estado.nav;
     return Api.chamar(acao, Object.assign(base, dados || {})).then(function (r) {
       // Se a pessoa já mudou de tela, ignora a resposta para não desenhar a tela antiga por cima
@@ -60,9 +60,9 @@
     });
   }
   function sessaoInvalida(e) {
-    if (sessao && /PIN incorreto|Pessoa não encontrada/.test(e && e.message)) {
+    if (sessao && /Código ou PIN incorreto/.test(e && e.message)) {
       gravarSessao(null);
-      toast('Entre de novo com o seu PIN.', 'erro');
+      toast('Entre de novo com o seu código e PIN.', 'erro');
       location.hash = '#/entrar';
       return true;
     }
@@ -265,15 +265,33 @@
   function telaEntrar() {
     comDados('inicio', {}, function (r) {
       estado.app = r.app;
-      var pins = Api.pinsDemo();
-      var sel = null, erroPin = '';
+      var pessoas = Api.pessoasDemo();
+      var sel = null, erroPin = '', codigoDigitado = '';
+      function focarPin() { var i = document.getElementById('pin'); if (i) i.focus(); }
+      function entrar(f, codigo, pin) {
+        ocupado(f.querySelector('[type=submit]'), true);
+        chamar('entrar', { codigo_acesso: codigo, pin: pin }).then(function (x) {
+          gravarSessao({ pessoa_id: x.pessoa.id, codigo: x.codigo, pin: pin, nome: x.pessoa.nome, papel: x.pessoa.papel, avatar: x.pessoa.avatar, modulos: x.modulos });
+          estado.app = x.app;
+          location.hash = x.pessoa.papel === 'lider' ? '#/lider/validar' : '#/inicio';
+        }).catch(function (e) {
+          erroPin = e.message; desenhar();
+          focarPin();
+        });
+      }
       function desenhar() {
         var corpo;
-        if (!sel) {
-          corpo = '<h2 class="h2">Quem é você?</h2>' + (r.pessoas.length ? '<div class="lista-pessoas">' + r.pessoas.map(function (p) {
+        if (!Api.demo) {
+          corpo = '<form class="cartao" data-form="login" novalidate style="gap:14px;padding:24px 16px"><h2 class="h2">Entrar</h2>' +
+            '<div class="campo"><label for="codigo">Seu código</label><input id="codigo" name="codigo" class="entrada" style="text-transform:uppercase;letter-spacing:4px" type="text" autocapitalize="characters" autocorrect="off" spellcheck="false" autocomplete="username" maxlength="8" value="' + esc(codigoDigitado) + '"></div>' +
+            '<div class="campo"><label for="pin">Seu PIN</label><input id="pin" name="pin" class="entrada entrada-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8">' +
+            (erroPin ? '<span class="erro-campo" role="alert">' + esc(erroPin) + '</span>' : '') + '</div>' +
+            '<button class="botao botao-grande" type="submit">Entrar</button><p class="muted" style="text-align:center;font-size:14px">Não tem ou esqueceu? Peça ao líder.</p></form>';
+        } else if (!sel) {
+          corpo = '<h2 class="h2">Quem é você?</h2>' + (pessoas.length ? '<div class="lista-pessoas">' + pessoas.map(function (p) {
             return '<button type="button" class="pessoa" data-acao="escolher" data-id="' + esc(p.id) + '">' + A(p.avatar, 48) + '<span class="pessoa-nome">' + esc(p.nome) + '</span>' +
               (p.papel === 'lider' ? '<span class="chip chip-escuro">Líder</span>' : '<span class="pessoa-turno">Turno ' + esc(p.turno || '–') + '</span>') +
-              (pins[p.id] ? '<span class="pessoa-dica">PIN ' + esc(pins[p.id]) + '</span>' : '') + '</button>';
+              '<span class="pessoa-dica">PIN ' + esc(p.pin) + '</span></button>';
           }).join('') + '</div>' : vazio('Ninguém cadastrado ainda', 'Peça ao líder para cadastrar a equipe na aba Pessoas da planilha.'));
         } else {
           corpo = '<form class="cartao" data-form="pin" novalidate style="align-items:center;text-align:center;gap:14px;padding:24px 16px">' + A(sel.avatar, 72) +
@@ -281,28 +299,26 @@
             '<div class="campo" style="width:100%"><label for="pin">Seu PIN</label><input id="pin" name="pin" class="entrada entrada-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8">' +
             (erroPin ? '<span class="erro-campo" role="alert">' + esc(erroPin) + '</span>' : '') + '</div>' +
             '<button class="botao botao-grande" type="submit">Entrar</button><button class="link-botao" type="button" data-acao="trocar">Não é você? Escolher outra pessoa</button></form>' +
-            (pins[sel.id] ? '<p class="muted" style="text-align:center">Modo demonstração: o PIN de ' + esc(primeiroNome(sel.nome)) + ' é ' + esc(pins[sel.id]) + '.</p>' : '');
+            '<p class="muted" style="text-align:center">Modo demonstração: o PIN de ' + esc(primeiroNome(sel.nome)) + ' é ' + esc(sel.pin) + '.</p>';
         }
         render(paginaSimples('<header class="cab-escuro entrar-cab"><div><h1 class="titulo-grande">' + esc(r.app.nome) + '</h1>' + (r.app.slogan ? '<p style="margin-top:8px;font-size:17px;font-weight:600;color:#FDBA74">' + esc(r.app.slogan) + '</p>' : '') + '<p class="sub-claro" style="margin-top:4px">' + esc(r.app.equipe) + '</p></div></header><main class="conteudo">' + corpo + '</main>'), {
           escolher: function (b) {
-            sel = r.pessoas.filter(function (p) { return p.id === b.getAttribute('data-id'); })[0];
+            sel = pessoas.filter(function (p) { return p.id === b.getAttribute('data-id'); })[0];
             erroPin = '';
             desenhar();
-            var i = document.getElementById('pin'); if (i) i.focus();
+            focarPin();
           },
           trocar: function () { sel = null; desenhar(); },
           'form:pin': function (f) {
             var pin = f.pin.value.trim();
             if (!pin) { erroPin = 'Digite o PIN.'; desenhar(); return; }
-            ocupado(f.querySelector('[type=submit]'), true);
-            chamar('entrar', { pessoa_id: sel.id, pin: pin }).then(function (x) {
-              gravarSessao({ pessoa_id: sel.id, pin: pin, nome: x.pessoa.nome, papel: x.pessoa.papel, avatar: x.pessoa.avatar, modulos: x.modulos });
-              estado.app = x.app;
-              location.hash = x.pessoa.papel === 'lider' ? '#/lider/validar' : '#/inicio';
-            }).catch(function (e) {
-              erroPin = e.message; desenhar();
-              var i = document.getElementById('pin'); if (i) i.focus();
-            });
+            entrar(f, sel.codigo, pin);
+          },
+          'form:login': function (f) {
+            var pin = f.pin.value.trim();
+            codigoDigitado = f.codigo.value.trim();
+            if (!codigoDigitado || !pin) { erroPin = 'Digite o código e o PIN.'; desenhar(); return; }
+            entrar(f, codigoDigitado, pin);
           }
         });
       }
@@ -1174,8 +1190,9 @@
       if (aviso && aviso.pin) {
         blocos.push('<div class="cartao-verde" style="flex-direction:column;align-items:stretch;gap:10px" role="status">' +
           '<span class="rotulo verde">' + (aviso.novo ? 'Cadastro feito' : 'PIN novo gerado') + '</span>' +
-          '<span class="nome">PIN de ' + esc(aviso.nome) + '</span>' +
-          '<span class="num" style="font-size:44px;letter-spacing:10px">' + esc(aviso.pin) + '</span>' +
+          '<span class="nome">Acesso de ' + esc(aviso.nome) + '</span>' +
+          '<span class="rotulo">Código</span><span class="codigo-acesso" style="font-size:36px;font-weight:700;letter-spacing:8px">' + esc(aviso.codigo) + '</span>' +
+          '<span class="rotulo">PIN</span><span class="num" style="font-size:44px;letter-spacing:10px">' + esc(aviso.pin) + '</span>' +
           '<span style="font-size:14px">Anote e entregue só para a pessoa. Por segurança, este PIN não aparece de novo. Se ela esquecer, gere outro aqui.</span>' +
           '<button type="button" class="botao botao-verde" data-acao="anotei">Pronto, anotei</button></div>');
       }
@@ -1187,7 +1204,9 @@
       var ativos = r.pessoas.filter(function (p) { return p.ativo; }).length;
       blocos.push('<section class="secao"><h2 class="h2">Pessoas · ' + ativos + (ativos === 1 ? ' ativa' : ' ativas') + '</h2>' + r.pessoas.map(function (p) {
         var chips = (p.papel === 'lider' ? '<span class="chip chip-escuro">Líder</span>' : '<span class="chip chip-cinza">Turno ' + esc(p.turno || '–') + '</span>') +
-          (p.voce ? '<span class="chip chip-azul">Você</span>' : '') + (p.ativo ? '' : '<span class="chip chip-vermelho">Desativada</span>');
+          '<span class="chip chip-cinza">Código ' + esc(p.codigo || '–') + '</span>' +
+          (p.voce ? '<span class="chip chip-azul">Você</span>' : '') + (p.ativo ? '' : '<span class="chip chip-vermelho">Desativada</span>') +
+          (p.bloqueado ? '<span class="chip chip-vermelho">Travada</span>' : '');
         return '<details class="cartao"' + (p.ativo ? '' : ' style="opacity:.75"') + '><summary style="gap:10px">' + A(p.avatar, 36) + '<span class="texto-flex"><span class="nome">' + esc(p.nome) + '</span><span style="display:flex;gap:6px;flex-wrap:wrap">' + chips + '</span></span></summary>' +
           '<form data-form="pessoa" data-id="' + esc(p.id) + '" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">' +
           '<div class="campo"><label for="pn-' + esc(p.id) + '">Nome</label><input id="pn-' + esc(p.id) + '" name="nome" class="entrada" maxlength="40" value="' + esc(p.nome) + '" required></div>' +
@@ -1205,7 +1224,7 @@
         'form:nova': function (f) {
           ocupado(f.querySelector('[type=submit]'), true);
           chamar('salvarPessoa', { nome: f.nome.value, turno: f.turno.value, papel: f.papel.value }).then(function (x) {
-            telaEquipe('', { novo: true, nome: x.nome, pin: x.pin });
+            telaEquipe('', { novo: true, nome: x.nome, pin: x.pin, codigo: x.codigo });
           }).catch(function (e) { ocupado(f.querySelector('[type=submit]'), false); falhou(e); });
         },
         'form:pessoa': function (f) {
@@ -1220,8 +1239,8 @@
         novoPin: function (b) {
           ocupado(b, true);
           chamar('novoPin', { id: b.getAttribute('data-id') }).then(function (x) {
-            if (x.proprio) atualizarSessao({ pin: x.pin });
-            telaEquipe('', { nome: x.nome, pin: x.pin });
+            if (x.proprio) atualizarSessao({ pin: x.pin, codigo: x.codigo });
+            telaEquipe('', { nome: x.nome, pin: x.pin, codigo: x.codigo });
           }).catch(function (e) { ocupado(b, false); falhou(e); });
         }
       });

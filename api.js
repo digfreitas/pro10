@@ -10,7 +10,7 @@ var Api = (function () {
     // Lê sempre do armazenamento, para que duas abas (TV e celular) vejam os mesmos dados
     try {
       var salvo = localStorage.getItem(CHAVE);
-      if (salvo) { memoria = JSON.parse(salvo); return memoria; }
+      if (salvo) { memoria = JSON.parse(salvo); if (Logica.garantirCodigos(Logica.criarDbMemoria(memoria))) salvarDemo(memoria); return memoria; }
     } catch (e) { /* armazenamento indisponível: segue só na memória */ }
     if (memoria) return memoria;
     memoria = Logica.dadosIniciais(Date.now(), true);
@@ -24,7 +24,7 @@ var Api = (function () {
   function executarDemo(req) {
     var db = Logica.criarDbMemoria(carregarDemo());
     var r = Logica.executar(db, req, {});
-    if (!Logica.SOMENTE_LEITURA[req.acao]) salvarDemo(db.tabelas);
+    if (!Logica.SOMENTE_LEITURA[req.acao] || req.acao === 'entrar') salvarDemo(db.tabelas);
     return JSON.parse(JSON.stringify(r));
   }
 
@@ -50,12 +50,13 @@ var Api = (function () {
     memoria = null;
     try { localStorage.removeItem(CHAVE); } catch (e) { /* ignora */ }
   }
-  function pinsDemo() {
-    var mapa = {};
-    if (!demo) return mapa;
-    (carregarDemo().Pessoas || []).forEach(function (p) { mapa[p.id] = p.pin; });
-    return mapa;
+  // A lista clicável existe só na demonstração. Com a planilha, o servidor não entrega nomes sem login.
+  function pessoasDemo() {
+    var lista = [];
+    if (!demo) return lista;
+    lista = (carregarDemo().Pessoas || []).filter(function (p) { return String(p.ativo).toLowerCase() === 'sim'; }).sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+    return lista;
   }
 
-  return { demo: demo, chamar: chamar, reiniciarDemo: reiniciarDemo, pinsDemo: pinsDemo };
+  return { demo: demo, chamar: chamar, reiniciarDemo: reiniciarDemo, pessoasDemo: pessoasDemo };
 })();
